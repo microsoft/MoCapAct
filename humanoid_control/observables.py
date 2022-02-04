@@ -1,0 +1,74 @@
+ALL_OBSERVABLES_SANS_ID = (
+    'walker/actuator_activation',
+    'walker/appendages_pos',
+    'walker/body_height',
+    'walker/end_effectors_pos',
+    'walker/gyro_control',
+    'walker/joints_pos',
+    'walker/joints_vel',
+    'walker/joints_vel_control',
+    'walker/sensors_accelerometer',
+    'walker/sensors_gyro',
+    'walker/sensors_torque',
+    'walker/sensors_touch',
+    'walker/sensors_velocimeter',
+    'walker/time_in_clip',
+    'walker/velocimeter_control',
+    'walker/world_zaxis',
+    'walker/reference_rel_joints',
+    'walker/reference_rel_bodies_pos_global',
+    'walker/reference_rel_bodies_quats',
+    'walker/reference_rel_bodies_pos_local',
+    'walker/reference_ego_bodies_quats',
+    'walker/reference_rel_root_quat',
+    'walker/reference_rel_root_pos_local',
+    'walker/reference_appendages_pos',
+)
+ALL_OBSERVABLES = ALL_OBSERVABLES_SANS_ID + ('walker/clip_id',)
+WALKER_OBSERVABLES = (
+    'walker/actuator_activation',
+    'walker/appendages_pos',
+    'walker/body_height',
+    'walker/end_effectors_pos',
+    'walker/joints_pos',
+    'walker/joints_vel',
+    'walker/sensors_accelerometer',
+    'walker/sensors_gyro',
+    'walker/sensors_torque',
+    'walker/sensors_touch',
+    'walker/sensors_velocimeter',
+    'walker/world_zaxis'
+)
+
+BASE_OBSERVABLES = (
+    'walker/joints_pos',
+    'walker/joints_vel',
+    'walker/sensors_velocimeter',
+    'walker/sensors_gyro',
+    'walker/end_effectors_pos',
+    'walker/world_zaxis',
+    'walker/actuator_activation',
+    'walker/sensors_touch',
+    'walker/sensors_torque',
+)
+
+TIME_INDEX_OBSERVABLES = BASE_OBSERVABLES + ('walker/time_in_clip',)
+OBSERVABLES_SANS_REFERENCE = BASE_OBSERVABLES + ('walker/body_height',)
+OBSERVABLES_WITH_REFERENCE = OBSERVABLES_SANS_REFERENCE + ('walker/reference_rel_bodies_pos_local', 'walker/reference_rel_bodies_quats')
+
+# Observables for hierarchical observations
+HIERARCHICAL_OBSERVABLES = dict(
+    ref_encoder=OBSERVABLES_WITH_REFERENCE,
+    decoder=BASE_OBSERVABLES
+)
+
+MIXED_HIERARCHICAL_OBSERVABLES = dict(
+    encoder=OBSERVABLES_SANS_REFERENCE,
+    decoder=BASE_OBSERVABLES
+)
+
+HYBRID_HIERARCHICAL_OBSERVABLES = dict(
+    ref_encoder=OBSERVABLES_WITH_REFERENCE,
+    stand_encoder=BASE_OBSERVABLES + ('embedding',),
+    decoder=BASE_OBSERVABLES
+)

@@ -1,0 +1,358 @@
+import os
+import os.path as osp
+from pathlib import Path
+import glob
+from datetime import datetime
+import pickle
+import zipfile
+import numpy as np
+import torch
+from absl import app, flags, logging
+import ml_collections
+from ml_collections import config_flags
+from datetime import datetime
+
+from stable_baselines3 import PPO
+from stable_baselines3.common.logger import configure
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
+from stable_baselines3.common.utils import get_device
+
+from dm_control.locomotion.tasks.reference_pose import types
+from humanoid_control import observables
+from humanoid_control import utils
+from humanoid_control.sb3 import env_util
+from humanoid_control.sb3 import features_extractor
+from humanoid_control.sb3 import tracking
+from humanoid_control.sb3 import utils as sb3_utils
+from humanoid_control.sb3 import wrappers
+from humanoid_control.clip_expert import callbacks
+
+
+# min steps for rollouts and evaluations
+ROLLOUT_MIN_STEPS = 1
+EVAL_MIN_STEPS = 10
+
+FLAGS = flags.FLAGS
+flags.DEFINE_string("clip_id", None, "Name of reference clip. See cmu_subsets.py")
+flags.DEFINE_string("log_root", None, "Directory where logs are stored")
+flags.DEFINE_integer("start_step", 0, "Start step in clip")
+flags.DEFINE_integer("max_steps", 256, "Maximum steps from start step")
+flags.DEFINE_string("data_dir", ".", "Directory where CMU mocap data is stored")
+flags.DEFINE_float("act_noise", 0.1, "Action noise to apply")
+flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
+
+# Training hyperparameters
+flags.DEFINE_integer("total_timesteps", int(1e8), "Total number of env steps")
+flags.DEFINE_integer("n_workers", 16, "Number of workers used for rollouts")
+flags.DEFINE_integer("n_steps", 4096, "Number of steps per policy optimization")
+flags.DEFINE_integer("n_epochs", 10, "Number of epochs when optimizing the PPO loss")
+flags.DEFINE_integer("batch_size", 256, "Minibatch size for PPO")
+flags.DEFINE_float("clip_range", 0.2, "Clipping parameter for PPO")
+flags.DEFINE_float("target_kl", 0.15, "Limits KL divergence in updating policy")
+flags.DEFINE_float("max_grad_norm", 1., "Clipping value for gradient norm")
+flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
+flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
+flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
+lr_config = ml_collections.ConfigDict()
+lr_config.start_val = 1e-4 # Initial step size
+lr_config.decay_half_life = 0.2 # Half-life for decay rate of learning rate
+lr_config.min_val = 1e-6 # Minimum step size
+config_flags.DEFINE_config_dict("learning_rate", lr_config)
+
+# Network hyperparameters
+flags.DEFINE_integer("n_layers", 3, "Number of hidden layers")
+flags.DEFINE_integer("layer_size", 1024, "Number of neurons in hidden layer")
+flags.DEFINE_enum("activation_fn", "relu", ["relu", "tanh", "elu"], "Activation for the hidden layers")
+
+# Evaluation hyperparameters
+eval_config = ml_collections.ConfigDict()
+eval_config.seed = 0 # RNG seed for evaluation
+eval_config.freq = int(1e5) # After how many total environment steps to evaluate policy
+eval_config.n_random_episodes = 32 # Number of episodes to evaluate the policy from random initial states
+eval_config.random_eval_act_noise = 0.1 # Action noise to apply for random initial states
+eval_config.n_start_episodes = 32 # Number of episodes to evaluate the policy from the start of snippet
+eval_config.start_eval_act_noise = 0.1 # Action noise to apply for start of snippet
+eval_config.early_stop = ml_collections.ConfigDict()
+eval_config.early_stop.ep_length_threshold = 1. # Episode length threshold for early stopping
+eval_config.early_stop.min_reward_delta = float('inf') # Minimum change in normalized reward to qualify as improvement
+eval_config.early_stop.patience = 10 # Number of queries with no improvement after which training is stopped
+config_flags.DEFINE_config_dict("eval", eval_config)
+
+# Misc. hyperparameters
+flags.DEFINE_float("gamma", 0.95, "Discount factor")
+flags.DEFINE_integer("seed", 0, "RNG seed for training")
+flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1"], "Device to do training on")
+flags.DEFINE_bool("check_other_runs", False, "Whether to check if preceding runs were finished")
+flags.DEFINE_bool("do_logging", True, "Whether to log")
+
+flags.mark_flag_as_required('clip_id')
+flags.mark_flag_as_required('log_root')
+
+def find_finished_jobs(job_root):
+    eval_paths = glob.glob(osp.join(job_root, '**/eval_random/evaluations.npz'), recursive=True)
+    for path in eval_paths:
+        data = np.load(path)
+        if len(data['timesteps']) == 150: # hard-coded number, but only for these runs
+            Path(osp.join(osp.dirname(osp.dirname(path)), 'FINISHED')).touch()
+            Path(osp.join(job_root, 'SUCCEEDED')).touch()
+            continue
+        best_rew, wait = float('-inf'), 0
+        rews, lens = data['results_norm'].mean(1), data['ep_lengths_norm'].mean(1)
+        for i in range(len(data['timesteps'])):
+            if lens[i] < FLAGS.eval.early_stop.ep_length_threshold:
+                wait = 0
+            if rews[i] >= best_rew + FLAGS.eval.early_stop.min_reward_delta:
+                best_rew = rews[i]
+                wait = 0
+            else:
+                wait += 1
+
+            if wait > FLAGS.patience:
+                Path(osp.join(osp.dirname(osp.dirname(path)), 'FINISHED')).touch()
+                Path(osp.join(job_root, 'SUCCEEDED')).touch()
+                continue
+
+def is_still_running(root):
+    now = datetime.now()
+    print()
+    print("CHECKING OTHER RUNS")
+    print(f"NOW: {now}")
+    # Check last time file, if present
+    if osp.exists(osp.join(root, 'last_time.txt')):
+        with open(osp.join(root, 'last_time.txt')) as f:
+            logged_time = f.read()
+        last_time = datetime.fromtimestamp(float(logged_time))
+        print(f"{osp.join(root, 'last_time.txt')}: {last_time}")
+        return (now-last_time).total_seconds() <= 60*60
+    # Otherwise, check TensorBoard file, if it exists and is populated
+    tb_paths = glob.glob(osp.join(root, 'events.out*'))
+    tb_paths = [path for path in tb_paths if os.stat(path).st_size > 100]
+    if len(tb_paths) > 0:
+        import tensorflow as tf
+        for path in tb_paths:
+            board = tf.compat.v1.train.summary_iterator(path)
+            last_time = float('-inf')
+            for item in board:
+                last_time = max(last_time, item.wall_time)
+            last_time = datetime.fromtimestamp(last_time)
+            print(f"{path}: {last_time}")
+            if (now-last_time).total_seconds() <= 60*60:
+                return True
+    # Otherwise, check timestamp of model zipfile
+    elif osp.exists(osp.join(root, 'eval_random/model/best_model.zip')):
+        with zipfile.ZipFile(osp.join(root, 'eval_random/model/best_model.zip'), 'r') as zfile:
+            time = zfile.getinfo('data').date_time
+        last_time = datetime(*time)
+        print(f"{osp.join(root, 'eval_random/model/best_model.zip')}: {last_time}")
+        return (now-last_time).total_seconds() <= 60*60*10.
+
+    # Otherwise, we assume no other running jobs
+    return False
+
+
+def make_env(seed=0, start_step=0, end_step=0, min_steps=ROLLOUT_MIN_STEPS, training=True,
+             act_noise=0., always_init_at_clip_start=False,
+             termination_error_threshold=float('inf')):
+    dataset = types.ClipCollection(
+        ids=[FLAGS.clip_id],
+        start_steps=[start_step],
+        end_steps=[end_step]
+    )
+    task_kwargs = dict(
+        reward_type='comic',
+        min_steps=min_steps-1,
+        always_init_at_clip_start=always_init_at_clip_start,
+        termination_error_threshold=termination_error_threshold
+    )
+    env_kwargs = dict(
+        dataset=dataset,
+        ref_steps=(0,),
+        act_noise=act_noise,
+        task_kwargs=task_kwargs
+    )
+    env = env_util.make_vec_env(
+        env_id=tracking.MocapTrackingGymEnv,
+        n_envs=FLAGS.n_workers,
+        seed=seed,
+        env_kwargs=env_kwargs,
+        vec_env_cls=SubprocVecEnv,
+        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
+    )
+    env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
+                        norm_obs=FLAGS.normalize_observation,
+                        norm_reward=FLAGS.normalize_reward,
+                        norm_obs_keys=observables.ALL_OBSERVABLES_SANS_ID)
+    return env
+
+def get_warm_start_path(evaluation_paths):
+    save_times = [osp.getmtime(path) for path in evaluation_paths]
+    sorted_indices = np.argsort(save_times)[::-1]
+    for i in sorted_indices:
+        path = evaluation_paths[sorted_indices[i]]
+        model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
+        if osp.exists(osp.join(model_path, 'best_model.zip')):
+            return model_path
+    return None
+
+def main(_):
+    # Data directory
+    os.environ['CMU_MOCAP_DIR'] = FLAGS.data_dir
+
+    clip_length = utils.get_clip_length(FLAGS.clip_id)
+    snippet_length = min(clip_length-FLAGS.start_step, FLAGS.max_steps)
+    end_step = FLAGS.start_step + snippet_length
+
+    # Log directory
+    now = datetime.now()
+    log_dir = osp.join(FLAGS.log_root, f"{FLAGS.clip_id}-{FLAGS.start_step}-{end_step}",
+                       str(FLAGS.seed), now.strftime("%Y-%m-%d_%H-%M-%S"))
+    if FLAGS.check_other_runs:
+        find_finished_jobs(osp.dirname(log_dir))
+        paths = glob.iglob(osp.join(osp.dirname(log_dir), '**/flags.txt'), recursive=True)
+        for path in paths:
+            root = osp.dirname(path)
+            if is_still_running(root):
+                msg = "Clip still has running job, terminating!"
+                logging.info(msg)
+                print(msg)
+                return
+
+    if osp.exists(osp.join(osp.dirname(log_dir), 'SUCCEEDED')):
+        logging.info("Already succeeded in training, terminating!")
+        print("Already succeeded in training, terminating!")
+        return
+
+    random_eval_path = osp.join(log_dir, 'eval_random')
+    start_eval_path = osp.join(log_dir, 'eval_start')
+    Path(osp.join(random_eval_path, 'model')).mkdir(parents=True, exist_ok=True)
+    Path(osp.join(start_eval_path, 'model')).mkdir(parents=True, exist_ok=True)
+
+    logging.get_absl_handler().use_absl_log_file("absl_logging", log_dir)
+
+    # Logger configuration
+    print(FLAGS.flags_into_string())
+    with open(osp.join(log_dir, 'flags.txt'), 'w') as f:
+        f.write(FLAGS.flags_into_string())
+    if FLAGS.do_logging:
+        format_strings = ['csv', 'tensorboard', 'stdout']
+        logger = configure(log_dir, format_strings)
+
+    # Rollout environment
+    env = make_env(seed=FLAGS.seed, start_step=FLAGS.start_step, end_step=end_step,
+                   min_steps=ROLLOUT_MIN_STEPS, training=True, act_noise=0.,
+                   always_init_at_clip_start=False,
+                   termination_error_threshold=FLAGS.termination_error_threshold)
+
+    # Evaluation environment where start point is selected at random
+    random_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
+                                            end_step=end_step, min_steps=EVAL_MIN_STEPS,
+                                            act_noise=FLAGS.eval.random_eval_act_noise,
+                                            training=False, always_init_at_clip_start=False,
+                                            termination_error_threshold=FLAGS.termination_error_threshold)
+    eval_freq = int(FLAGS.eval.freq / FLAGS.n_workers)
+    random_eval_model_path = osp.join(random_eval_path, 'model')
+    callback_on_new_best = callbacks.SaveVecNormalizeCallback(
+        save_freq=1,
+        save_path=random_eval_model_path
+    )
+    early_stopping_callback = callbacks.EarlyStoppingCallback(
+        FLAGS.eval.early_stop.ep_length_threshold,
+        FLAGS.eval.early_stop.min_reward_delta,
+        patience=FLAGS.eval.early_stop.patience
+    )
+    random_eval_callback = callbacks.MocapTrackingEvalCallback(
+        random_eval_env_ctor,
+        best_model_save_path=random_eval_model_path,
+        log_path=random_eval_path,
+        eval_freq=eval_freq,
+        callback_on_new_best=callback_on_new_best,
+        early_stopping_callback=early_stopping_callback,
+        n_eval_episodes=FLAGS.eval.n_random_episodes,
+        deterministic=True,
+        render=False,
+        name="eval_random"
+    )
+
+    # Evaluation environment where start point is beginning of snippet
+    start_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
+                                           act_noise=FLAGS.eval.start_eval_act_noise, end_step=end_step,
+                                           min_steps=EVAL_MIN_STEPS, training=False,
+                                           always_init_at_clip_start=True,
+                                           termination_error_threshold=FLAGS.termination_error_threshold)
+    start_eval_model_path = osp.join(start_eval_path, 'model')
+    callback_on_new_best = callbacks.SaveVecNormalizeCallback(
+        save_freq=1,
+        save_path=start_eval_model_path
+    )
+    start_eval_callback = callbacks.MocapTrackingEvalCallback(
+        start_eval_env_ctor,
+        best_model_save_path=start_eval_model_path,
+        log_path=start_eval_path,
+        eval_freq=eval_freq,
+        callback_on_new_best=callback_on_new_best,
+        n_eval_episodes=FLAGS.eval.n_start_episodes,
+        deterministic=True,
+        render=False,
+        name="eval_start"
+    )
+
+    # Set up model (policy + value)
+    decay = np.log(2) / FLAGS.learning_rate.decay_half_life
+    lr_schedule = sb3_utils.get_exponential_fn(FLAGS.learning_rate.start_val, decay, FLAGS.learning_rate.min_val)
+    layer_sizes = FLAGS.n_layers * [FLAGS.layer_size]
+    activation_fns = dict(relu=torch.nn.ReLU, tanh=torch.nn.Tanh, elu=torch.nn.ELU)
+    policy_kwargs = dict(
+        net_arch=[dict(pi=layer_sizes, vf=layer_sizes)],
+        activation_fn=activation_fns[FLAGS.activation_fn],
+        log_std_init=np.log(FLAGS.act_noise),
+        features_extractor_class=features_extractor.CmuHumanoidFeaturesExtractor,
+        features_extractor_kwargs=dict(observable_keys=observables.TIME_INDEX_OBSERVABLES)
+    )
+    model = PPO("MultiInputPolicy", env, n_steps=int(FLAGS.n_steps/FLAGS.n_workers),
+                gamma=FLAGS.gamma, clip_range=FLAGS.clip_range,
+                batch_size=FLAGS.batch_size, n_epochs=FLAGS.n_epochs,
+                gae_lambda=FLAGS.gae_lambda, max_grad_norm=FLAGS.max_grad_norm,
+                learning_rate=lr_schedule, target_kl=FLAGS.target_kl,
+                policy_kwargs=policy_kwargs, seed=FLAGS.seed, verbose=1,
+                device=FLAGS.device)
+    if FLAGS.do_logging:
+        model.set_logger(logger)
+    model.policy.log_std.requires_grad = False # keep policy covariance fixed throughout training
+
+    # Load a prior policy, if available
+    experiment_root = osp.abspath(osp.join(log_dir, osp.pardir))
+    evaluation_paths = glob.glob(osp.join(experiment_root, '**/eval_random/evaluations.npz'), recursive=True)
+    warm_start_path = get_warm_start_path(evaluation_paths)
+    if warm_start_path is None:
+        logging.info("Training from scratch!")
+        print("Training from scratch!")
+    else:
+        logging.info("Loading prior model from: " + warm_start_path)
+        print("Loading prior model from: " + warm_start_path)
+        with zipfile.ZipFile(osp.join(warm_start_path, 'best_model.zip')) as zip_ref:
+            zip_ref.extractall(warm_start_path)
+        device = get_device(FLAGS.device)
+        model.policy.load_state_dict(torch.load(osp.join(warm_start_path, 'policy.pth'), map_location=device))
+        model.policy.optimizer.load_state_dict(torch.load(osp.join(warm_start_path, 'policy.optimizer.pth'),
+                                                          map_location=device))
+        with open(osp.join(warm_start_path, 'vecnormalize.pkl'), 'rb') as f:
+            prior_norm_env = pickle.load(f)
+            env.obs_rms = prior_norm_env.obs_rms
+            env.ret_rms = prior_norm_env.ret_rms
+
+    # Train the model
+    callback = [
+        random_eval_callback,
+        start_eval_callback,
+        callbacks.NormalizedRolloutCallback(),
+        callbacks.LogOnRolloutEndCallback(log_dir)
+    ]
+    model.learn(FLAGS.total_timesteps, callback=callback)
+
+    logging.info("Finished!")
+    print("Finished!")
+    Path(osp.join(log_dir, "FINISHED")).touch()
+    Path(osp.join(osp.dirname(log_dir), "SUCCEEDED")).touch()
+
+if __name__ == '__main__':
+    app.run(main)
