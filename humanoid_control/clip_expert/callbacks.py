@@ -13,6 +13,7 @@ from humanoid_control.sb3 import evaluation
 
 class SaveVecNormalizeCallback(BaseCallback):
     """
+    Taken from: https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/callbacks.py
     Callback for saving a VecNormalize wrapper every ``save_freq`` steps
     :param save_freq: (int)
     :param save_path: (str) Path to the folder where ``VecNormalize`` will be saved, as ``vecnormalize.pkl``
