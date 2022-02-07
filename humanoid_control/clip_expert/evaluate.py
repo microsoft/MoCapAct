@@ -3,14 +3,16 @@ import pickle
 import zipfile
 import numpy as np
 import torch
-from absl import app, flags, logging
+import json
+from absl import app
+from absl import flags
+from absl import logging
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from dm_control.viewer import application
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
-from humanoid_control import utils
 from humanoid_control.sb3 import env_util
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import features_extractor
@@ -29,7 +31,7 @@ flags.DEFINE_float("ghost_offset", 0., "Offset for reference ghost")
 
 # Evaluation hyperparameters
 flags.DEFINE_integer("n_eval_episodes", 0, "Number of episodes to numerically evaluate policy")
-flags.DEFINE_integer("n_workers", 8, "Number of parallel workers")
+flags.DEFINE_integer("n_workers", 1, "Number of parallel workers")
 flags.DEFINE_bool("always_init_at_clip_start", False, "Whether to initialize at beginning or random point in clip")
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off expert rollout")
 flags.DEFINE_integer("seed", 0, "RNG seed")
@@ -46,19 +48,15 @@ def main(_):
         'model'
     )
 
-    # Extract model zip file
-    with zipfile.ZipFile(osp.join(model_path, 'best_model.zip')) as zip_ref:
-        zip_ref.extractall(model_path)
-
-    flags = utils.load_absl_flags(osp.join(FLAGS.exp_root, 'flags.txt'))
-
     # Make environment
-    clip_length = utils.get_clip_length(flags['clip_id'])
-    snippet_length = min(clip_length-int(flags['start_step']), int(flags['max_steps']))
-    end_step = int(flags['start_step']) + snippet_length
+    with open(osp.join(FLAGS.exp_root, 'clip_info.json')) as f:
+        clip_info = json.load(f)
+    clip_id = clip_info['clip_id']
+    start_step = clip_info['start_step']
+    end_step = clip_info['end_step']
     dataset = types.ClipCollection(
-        ids=[flags['clip_id']],
-        start_steps=[int(flags['start_step'])],
+        ids=[clip_id],
+        start_steps=[start_step],
         end_steps=[end_step]
     )
     task_kwargs = dict(
@@ -94,22 +92,25 @@ def main(_):
         obs_stats = norm_env.obs_rms
 
     # Set up model
-    features_extractor_class = lambda space: features_extractor.CmuHumanoidFeaturesExtractor(
-        space,
+    with zipfile.ZipFile(osp.join(model_path, 'best_model.zip')) as archive:
+        json_string = archive.read("data").decode()
+        json_dict = json.loads(json_string)
+        policy_kwargs = {k: v for k, v in json_dict['policy_kwargs'].items() if not k.startswith(':')}
+        if 'Tanh' in policy_kwargs['activation_fn']:
+            policy_kwargs['activation_fn'] = torch.nn.Tanh
+        elif 'ReLU' in policy_kwargs['activation_fn']:
+            policy_kwargs['activation_fn'] = torch.nn.ReLU
+        else:
+            policy_kwargs['activation_fn'] = torch.nn.ELU
+    policy_kwargs['features_extractor_class'] = features_extractor.CmuHumanoidFeaturesExtractor
+    policy_kwargs['features_extractor_kwargs'] = dict(
         observable_keys=observables.TIME_INDEX_OBSERVABLES,
-        obs_rms=obs_stats,
+        obs_rms=obs_stats
     )
-    layer_sizes = int(flags['n_layers']) * [int(flags['layer_size'])]
-    activation_fns = dict(relu=torch.nn.ReLU, tanh=torch.nn.Tanh, elu=torch.nn.ELU)
-    activation_fn = activation_fns.get(flags['activation_fn'], torch.nn.ReLU)
-    policy_kwargs = dict(
-        features_extractor_class=features_extractor_class,
-        net_arch=[dict(pi=layer_sizes, vf=layer_sizes)],
-        activation_fn=activation_fn
+    model = PPO.load(
+        osp.join(model_path, 'best_model.zip'),
+        custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0.)
     )
-    model = PPO("MultiInputPolicy", vec_env, policy_kwargs=policy_kwargs, verbose=1, device='cpu')
-    params = torch.load(osp.join(model_path, 'policy.pth'))
-    model.policy.load_state_dict(params)
 
     if FLAGS.n_eval_episodes > 0:
         ep_rews, ep_lens, ep_norm_rews, ep_norm_lens = evaluation.evaluate_locomotion_policy(
@@ -119,10 +120,10 @@ def main(_):
             deterministic=True,
             return_episode_rewards=True
         )
-        print("Mean return: %.1f +/- %.1f" % (np.mean(ep_rews), np.std(ep_rews)))
-        print("Mean episode length: %.1f +/- %.1f" % (np.mean(ep_lens), np.std(ep_lens)))
-        print("Mean normalized return: %.3f +/- %.3f" % (np.mean(ep_norm_rews), np.std(ep_norm_rews)))
-        print("Mean normalized episode length: %.3f +/- %.3f" % (np.mean(ep_norm_lens), np.std(ep_norm_lens)))
+        print(f"Mean return: {np.mean(ep_rews):.1f} +/- {np.std(ep_lens):.1f}")
+        print(f"Mean episode length: {np.mean(ep_lens):.1f} +/- {np.std(ep_lens):.1f}")
+        print(f"Mean normalized return: {np.mean(ep_norm_rews):.3f} +/- {np.std(ep_norm_rews):.3f}")
+        print(f"Mean normalized episode length: {np.mean(ep_norm_lens):.3f} +/- {np.std(ep_norm_lens):.3f}")
 
         if FLAGS.save_path is not None:
             np.savez(
