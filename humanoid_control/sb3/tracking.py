@@ -19,6 +19,9 @@ class MocapTrackingGymEnv(core.Env):
     task_kwargs: passed to MultiClipMocapTracking constructor
     environment_kwargs: passed to composer's Environment constructor
     """
+
+    metadata = {"render.modes": ["rgb_array"], "video.frames_per_second": 30}
+
     def __init__(
         self,
         dataset=None,
@@ -127,7 +130,7 @@ class MocapTrackingGymEnv(core.Env):
         return self._get_obs(time_step)
 
     # pylint: disable=arguments-differ
-    def render(self, mode='rgb_array', height=None, width=None, camera_id=0):
+    def render(self, mode='rgb_array', height=None, width=None, camera_id=None):
         assert mode == 'rgb_array', 'only support rgb_array mode, given %s' % mode
         height = height or self._height
         width = width or self._width
