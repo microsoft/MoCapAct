@@ -59,8 +59,10 @@ class NormalizedRolloutCallback(BaseCallback):
         log_interval, iteration = self.locals['log_interval'], self.locals['iteration']
         if log_interval is not None and iteration % log_interval == 0:
             if len(self.model.ep_info_buffer) > 0 and len(self.model.ep_info_buffer[0]) > 0:
-                self.logger.record("rollout/ep_rew_mean_norm", safe_mean([ep_info['r_norm'] for ep_info in self.model.ep_info_buffer]))
-                self.logger.record("rollout/ep_len_mean_norm", safe_mean([ep_info['l_norm'] for ep_info in self.model.ep_info_buffer]))
+                r_norm_mean = safe_mean([ep_info['r_norm'] for ep_info in self.model.ep_info_buffer])
+                l_norm_mean = safe_mean([ep_info['l_norm'] for ep_info in self.model.ep_info_buffer])
+                self.logger.record("rollout/ep_rew_mean_norm", r_norm_mean)
+                self.logger.record("rollout/ep_len_mean_norm", l_norm_mean)
 
 class LogOnRolloutEndCallback(BaseCallback):
     def __init__(self, log_dir, verbose: float = 0):
@@ -199,7 +201,8 @@ class MocapTrackingEvalCallback(EvalCallback):
             self.last_mean_ep_length_norm = mean_ep_length_norm
 
             if self.verbose > 0:
-                print(f"{self.name} num_timesteps={self.num_timesteps}, " f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}")
+                print(f"{self.name} num_timesteps={self.num_timesteps}, "
+                      f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}")
                 print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
                 print(f"Episode normalized reward: {mean_reward_norm:.3f} +/- {std_reward_norm:.3f}")
                 print(f"Episode normalized length: {mean_ep_length_norm:.3f} +/- {std_ep_length_norm:.3f}")
