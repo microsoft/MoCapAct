@@ -219,6 +219,8 @@ def main(_):
 
     # Logger configuration
     print(FLAGS.flags_into_string())
+    with open(osp.join(log_dir, 'flags.txt'), 'w') as f:
+        f.write(FLAGS.flags_into_string())
     if FLAGS.do_logging:
         format_strings = ['csv', 'tensorboard', 'stdout']
         logger = configure(log_dir, format_strings)
