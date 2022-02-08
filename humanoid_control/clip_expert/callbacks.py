@@ -204,8 +204,8 @@ class MocapTrackingEvalCallback(EvalCallback):
                 print(f"{self.name} num_timesteps={self.num_timesteps}, "
                       f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}")
                 print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
-                print(f"Episode normalized reward: {mean_reward_norm:.3f} +/- {std_reward_norm:.3f}")
-                print(f"Episode normalized length: {mean_ep_length_norm:.3f} +/- {std_ep_length_norm:.3f}")
+                print(f"Normalized episode reward: {mean_reward_norm:.3f} +/- {std_reward_norm:.3f}")
+                print(f"Normalized episode length: {mean_ep_length_norm:.3f} +/- {std_ep_length_norm:.3f}")
             # Add to current Logger
             self.logger.record(f"{self.name}/mean_reward", float(mean_reward))
             self.logger.record(f"{self.name}/mean_ep_length", mean_ep_length)
