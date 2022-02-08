@@ -35,7 +35,7 @@ flags.DEFINE_integer("start_step", 0, "Start step in clip")
 flags.DEFINE_integer("max_steps", 256, "Maximum steps from start step")
 flags.DEFINE_string("data_dir", ".", "Directory where CMU mocap data is stored")
 flags.DEFINE_float("act_noise", 0.1, "Action noise to apply")
-flags.DEFINE_float("min_steps", 1, "Minimum steps in a rollout")
+flags.DEFINE_integer("min_steps", 1, "Minimum steps in a rollout")
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
 
 # Training hyperparameters
@@ -129,7 +129,7 @@ def is_still_running(root):
     return False
 
 
-def make_env(seed=0, start_step=0, end_step=0, min_steps=FLAGS.min_steps, training=True,
+def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
              act_noise=0., always_init_at_clip_start=False, video_folder=None,
              termination_error_threshold=float('inf')):
     dataset = types.ClipCollection(
@@ -164,7 +164,7 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=FLAGS.min_steps, traini
     env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
                        norm_obs=FLAGS.normalize_observation,
                        norm_reward=FLAGS.normalize_reward,
-                       norm_obs_keys=observables.ALL_OBSERVABLES_SANS_ID)
+                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
     return env
 
 def get_warm_start_path(evaluation_paths):

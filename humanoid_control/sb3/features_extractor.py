@@ -13,7 +13,7 @@ class CmuHumanoidFeaturesExtractor(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: gym.spaces.Dict,
-        observable_keys: Union[Sequence[Text], Dict[Text, Sequence[Text]]] = observables.ALL_OBSERVABLES_SANS_ID,
+        observable_keys: Union[Sequence[Text], Dict[Text, Sequence[Text]]] = observables.CMU_HUMANOID_OBSERVABLES,
         obs_rms: Optional[RunningMeanStd] = None
     ):
         self._observation_space = observation_space
