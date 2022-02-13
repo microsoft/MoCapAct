@@ -3,7 +3,6 @@ import numpy as np
 import gym
 from gym import spaces
 from copy import deepcopy
-from dataclasses import dataclass, field
 
 from stable_baselines3.common.vec_env import VecMonitor
 from stable_baselines3.common.vec_env.base_vec_env import VecEnvStepReturn
@@ -11,19 +10,6 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnvStepReturn
 ######
 # Gym
 ######
-@dataclass
-class EmbeddingRegularization:
-    """
-    For defining the KL regularization of the embedding.
-    """
-    weight: float
-    correlation: float
-    std_dev: float = field(init=False)
-
-    def __post_init__(self):
-        assert 0 <= self.correlation <= 1
-        self.std_dev = np.sqrt(1 - self.correlation**2)
-
 class Embedding(gym.Wrapper):
     """
     Includes a policy's embedding as an action and observation.
@@ -36,15 +22,17 @@ class Embedding(gym.Wrapper):
     ):
         super().__init__(env)
         self.embed_dim = embed_dim
-        self.obs_key = 'embedding'
+        self._obs_key = 'embedding'
+        self._last_embed = None
 
-        self.observation_space = deepcopy(env.observation_space)
-        self.observation_space[self.obs_key] = spaces.Box(
-            low=float('-inf'),
-            high=float('-inf'),
+        self._embed_space = spaces.Box(
+            low=-embed_max,
+            high=embed_max,
             shape=(np.maximum(embed_dim, 1),),
             dtype=np.float32
         )
+        self.observation_space = deepcopy(env.observation_space)
+        self.observation_space.spaces[self._obs_key] = self._embed_space
 
         embed_act_max = np.full(embed_dim, embed_max, dtype=env.action_space.dtype)
         low = np.concatenate([env.action_space.low, -embed_act_max])
@@ -58,8 +46,9 @@ class Embedding(gym.Wrapper):
 
     def reset(self, **kwargs):
         obs = self.env.reset()
-        embed = self.np_random.randn(self.embed_dim).astype(np.float32) if self.embed_dim > 0 else np.array([0], dtype=np.float32)
-        obs[self.obs_key] = embed #TODO: clip?
+        embed = self.np_random.randn(*self._embed_space.shape).astype(self._embed_space.dtype)
+        embed = embed.clip(self._embed_space.low, self._embed_space.high)
+        obs[self._obs_key] = self._last_embed = embed
         return obs
 
     def step(self, action: np.ndarray):
@@ -68,7 +57,8 @@ class Embedding(gym.Wrapper):
         else:
             act, embed = action, np.array([0], dtype=np.float32)
         obs, rew, done, info = self.env.step(act)
-        obs[self.obs_key] = embed
+        info['prev_embed'] = self._last_embed.copy()
+        obs[self._obs_key] = self._last_embed = embed
         return obs, rew, done, info
 
 #####################
