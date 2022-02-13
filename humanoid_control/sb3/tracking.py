@@ -62,6 +62,7 @@ class MocapTrackingGymEnv(core.Env):
 
         # set seed
         self.seed()
+        self.np_random = self._env.random_state
 
         self._height = height
         self._width = width
