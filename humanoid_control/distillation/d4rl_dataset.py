@@ -93,9 +93,9 @@ class D4RLDataset(Dataset):
               
         data_dict = {
             'observations': np.array(obs),
-            'actions': np.array(obs),
-            'rewards': np.array(obs),
-            'terminals': np.array(obs)
+            'actions': np.array(act),
+            'rewards': np.array(rews),
+            'terminals': np.array(terms)
         }
 
         return data_dict
