@@ -76,26 +76,28 @@ class D4RLDataset(Dataset):
         return data_dict
 
     def _load_data(self, dset, clip_ids: Optional[Sequence[Text]] = None):
+        self._clip_ids = []
+
         if clip_ids is None:
-            self._clip_ids.append(tuple([k for k in dset.keys() if k.startswith('CMU')]))
+            self._clip_ids = [k for k in dset.keys() if k.startswith('CMU')]
         else:
-            self._clip_ids.append(tuple([k for k in clip_ids if k in dset.keys()]))
+            self._clip_ids = [k for k in clip_ids if k in dset.keys()]
 
         obs, act, rews, terms = [], [], [], []
         for clip_id in self._clip_ids:          
-            for episode in range(len(dset[f"{clip_id}/{episode}/episode_lengths"])):
-                obs.append(dset[f"{clip_id}/{episode}/observations"])
-                act.append(dset[f"{clip_id}/{episode}/actions"])
-                rews.append(dset[f"{clip_id}/{episode}/rewards"])
-                terminals = [0] * dset[f"{clip_id}/{episode}/episode_lengths"]
+            for episode in range(len(dset[f"{clip_id}/episode_lengths"])):
+                obs.append(dset[f"{clip_id}/{episode}/observations"][...])
+                act.append(dset[f"{clip_id}/{episode}/actions"][...])
+                rews.append(dset[f"{clip_id}/{episode}/rewards"][...])
+                terminals = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
                 terminals[-1] = 1
-                terms.append(terminals)
+                terms.append(np.array(terminals))
               
         data_dict = {
-            'observations': np.array(obs),
-            'actions': np.array(act),
-            'rewards': np.array(rews),
-            'terminals': np.array(terms)
+            'observations': np.concatenate(obs),
+            'actions': np.concatenate(act),
+            'rewards': np.concatenate(rews),
+            'terminals': np.concatenate(terms),
         }
 
         return data_dict
@@ -124,4 +126,4 @@ class D4RLDataset(Dataset):
 
 if __name__ == "__main__":
     dset = D4RLDataset()
-    dset.get_dataset(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'CMU_016_22.hdf5'))
+    dset.get_d4rl_dataset_from_expert_rollouts(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'CMU_016_22.hdf5'))
