@@ -335,6 +335,7 @@ def main(_):
             custom_objects=dict(
                 policy_kwargs=policy_kwargs,
                 n_steps=int(FLAGS.n_steps/FLAGS.n_workers),
+                n_envs=FLAGS.n_workers,
                 clip_range=FLAGS.clip_range,
                 learning_rate=lr_schedule
             )
