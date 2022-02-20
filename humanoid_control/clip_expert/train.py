@@ -167,15 +167,27 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
                        norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
     return env
 
+#def get_warm_start_path(evaluation_paths):
+#    save_times = [osp.getmtime(path) for path in evaluation_paths]
+#    sorted_indices = np.argsort(save_times)[::-1]
+#    for i in sorted_indices:
+#        path = evaluation_paths[sorted_indices[i]]
+#        model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
+#        if osp.exists(osp.join(model_path, 'best_model.zip')):
+#            return model_path
+#    return None
 def get_warm_start_path(evaluation_paths):
-    save_times = [osp.getmtime(path) for path in evaluation_paths]
-    sorted_indices = np.argsort(save_times)[::-1]
-    for i in sorted_indices:
-        path = evaluation_paths[sorted_indices[i]]
-        model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
-        if osp.exists(osp.join(model_path, 'best_model.zip')):
-            return model_path
-    return None
+    best_rew, best_path = float('-inf'), None
+    for path in evaluation_paths:
+        try:
+            evaluations = np.load(path)
+        except:
+            continue
+        max_rew = evaluations['results_norm'].mean(1).max()
+        if max_rew > best_rew:
+            best_rew = max_rew
+            best_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
+    return best_path
 
 def main(_):
     # Data directory
