@@ -183,7 +183,7 @@ def get_warm_start_path(evaluation_paths):
             evaluations = np.load(path)
         except:
             continue
-        max_rew = evaluations['results_norm'].mean(1).max()
+        max_rew = evaluations['results'].mean(1).max()
         if max_rew > best_rew:
             best_rew = max_rew
             best_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
