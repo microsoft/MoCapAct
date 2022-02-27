@@ -5,39 +5,57 @@ Applies noise to the expert to allow better state-action coverage.
 Created dataset has following hierarchy:
     |- clip1
        |- id
-       |- episode_lengths
-       |- episode_rewards
+       |- early_termination
+       |- loaded_metrics
+         |- episode_lengths
+         |- episode_returns
+         |- norm_episode_lengths
+         |- norm_episode_returns
+       |- start_metrics
+         |- episode_lengths
+         |- episode_returns
+         |- norm_episode_lengths
+         |- norm_episode_returns
+       |- rsi_metrics
+         |- episode_lengths
+         |- episode_returns
+         |- norm_episode_lengths
+         |- norm_episode_returns
        |- 0
          |- actions
          |- observations
          |- rewards
-         |- returns
+         |- advantages
          |- values
            ...
        |- 1
          |- actions
          |- observations
          |- rewards
-         |- returns
+         |- advantages
          |- values
            ...
        ...
     |- clip2
        |- id
+       |- early_termination
+       |- loaded_metrics
+       |- start_metrics
+       |- rsi_metrics
        |- episode_lengths
        |- episode_rewards
        |- 0
          |- actions
          |- observations
          |- rewards
-         |- returns
+         |- advantages
          |- values
            ...
        |- 1
          |- actions
          |- observations
          |- rewards
-         |- returns
+         |- advantages
          |- values
            ...
        ...
@@ -55,8 +73,14 @@ Created dataset has following hierarchy:
        |- count
     |- n_start_rollouts
     |- n_random_rollouts
-For each clip, "episode_lengths" and "episode_rewards" is an array of
-episode lengths and rewards, respectively.
+
+For each clip, "loaded_metrics" corresponds to the metrics of the loaded policy as
+given by the evaluations.npz file. "rsi_metrics" corresponds to the metrics of the loaded
+policy when the policy is initialized at random time steps in the clip as given by
+the rollout_experts.py script. The "loaded_metrics" and "rsi_metrics" can be compared to
+verify that they are similar. The "start_metrics" corresponds to the metrics of the loaded
+policy when the policy is initialized at the start of the snippet as given by the
+rollout_experts.py script.
 """
 
 import pickle
@@ -77,7 +101,6 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
-from humanoid_control import utils
 from humanoid_control.sb3 import env_util
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.sb3 import tracking
@@ -205,7 +228,7 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
     obs = vec_env.reset()
 
     ctr = 0
-    all_observations, all_actions, all_rewards, all_discounted_returns, all_values = [], [], [], [], []
+    all_observations, all_actions, all_rewards, all_values, all_advs = [], [], [], [], []
     all_normalized_returns, all_normalized_lengths, all_early_terminations = [], [], []
     curr_observations = [{k: [] for k in obs.keys()} for _ in range(FLAGS.n_workers)]
     curr_actions = [[] for _ in range(FLAGS.n_workers)]
@@ -241,9 +264,15 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
                 all_rewards.append(np.array(curr_rewards[i]))
                 all_values.append(np.array(curr_values[i]))
 
-                r = curr_rewards[i]
-                rets = scipy.signal.lfilter([1], [1, -model.gamma], r[::-1], axis=0)[::-1]
-                all_discounted_returns.append(rets)
+                # GAE(lambda)
+                rew, val = curr_rewards[i], curr_values[i]
+                last_gae_lam, adv = 0, []
+                for step in reversed(range(len(val))):
+                    next_val = val[step+1] if step < len(val)-1 else 0.
+                    delta = rew[step] + model.gamma*next_val - val[step]
+                    last_gae_lam = delta + model.gamma*model.gae_lambda*last_gae_lam
+                    adv.insert(0, last_gae_lam)
+                all_advs.append(np.array(adv))
 
                 all_normalized_returns.append(infos[i]['episode']['r_norm'])
                 all_normalized_lengths.append(infos[i]['episode']['l_norm'])
@@ -261,8 +290,8 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
                         observations=all_observations,
                         actions=all_actions,
                         rewards=all_rewards,
-                        discounted_returns=all_discounted_returns,
                         values=all_values,
+                        advantages=all_advs,
                         normalized_returns=np.array(all_normalized_returns),
                         normalized_lengths=np.array(all_normalized_lengths),
                         early_terminations=np.array(all_early_terminations)
@@ -287,13 +316,13 @@ def create_dataset(expert_paths, expert_metrics, output_path):
         all_observations = start_results['observations'] + rsi_results['observations']
         all_actions = start_results['actions'] + rsi_results['actions']
         all_rewards = start_results['rewards'] + rsi_results['rewards']
-        all_discounted_returns = start_results['discounted_returns'] + rsi_results['discounted_returns']
+        all_advantages = start_results['advantages'] + rsi_results['advantages']
         all_values = start_results['values'] + rsi_results['values']
         all_early_terminations = start_results['early_terminations'] + rsi_results['early_terminations']
 
         for i in range(len(all_actions)): # iterate over episodes
             rollout_subgrp = clip_grp.create_group(str(i))
-            observations, acts, rews, rets, vals = all_observations[i], all_actions[i], all_rewards[i], all_discounted_returns[i], all_values[i]
+            observations, acts, rews, vals, advs = all_observations[i], all_actions[i], all_rewards[i], all_values[i], all_advantages[i]
 
             # Actions
             act_dset = rollout_subgrp.create_dataset("actions", acts.shape, np.float32)
@@ -311,13 +340,13 @@ def create_dataset(expert_paths, expert_metrics, output_path):
             rew_dset = rollout_subgrp.create_dataset("rewards", rews.shape, np.float32)
             rew_dset[...] = rews
 
-            # Discounted returns
-            ret_dset = rollout_subgrp.create_dataset("discounted_returns", rets.shape, np.float32)
-            ret_dset[...] = rets
-
             # Values
             val_dset = rollout_subgrp.create_dataset("values", vals.shape, np.float32)
             val_dset[...] = vals
+
+            # Advantages
+            adv_dset = rollout_subgrp.create_dataset("advantages", advs.shape, np.float32)
+            adv_dset[...] = advs
 
             # Accumulate statistics
             obs_total += obs.sum(0)
