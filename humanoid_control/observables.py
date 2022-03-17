@@ -76,3 +76,9 @@ HYBRID_HIERARCHICAL_OBSERVABLES = dict(
     stand_encoder=HIGH_LEVEL_OBSERVABLES_SANS_REFERENCE + ('embedding',),
     decoder=BASE_OBSERVABLES
 )
+
+CLIP_HIERARCHICAL_OBSERVABLES = dict(
+    ref_encoder=HIGH_LEVEL_OBSERVABLES,
+    stand_encoder=HIGH_LEVEL_OBSERVABLES + ('embedding',),
+    decoder=BASE_OBSERVABLES
+)

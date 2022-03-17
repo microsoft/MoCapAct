@@ -1,4 +1,5 @@
 dm_control
-stable-baselines3
+#stable-baselines3
 pytorch-lightning
 ml_collections
+git+https://github.com/DLR-RM/stable-baselines3.git@master

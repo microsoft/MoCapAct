@@ -28,7 +28,10 @@ class ExpertDataset(Dataset):
         normalize_act: bool = False,
         concat_observables: bool = True,
         preload: bool = False,
-        temperature: Optional[float] = None
+        clip_centric_weight: bool = False,
+        advantage_weights: bool = True,
+        temperature: Optional[float] = None,
+        max_weight: float = 20
     ):
         self._dsets = [h5py.File(fname, 'r') for fname in h5py_fnames]
         self._observables = observables
@@ -46,11 +49,13 @@ class ExpertDataset(Dataset):
         self._concat_observables = concat_observables
         self._preload = preload
         self._ref_steps = self._dsets[0]['ref_steps'][...]
+        self._clip_centric_weight = clip_centric_weight
+        self._advantage_weights = advantage_weights
         self._temperature = temperature
+        self._max_weight = max_weight
         self._normalize_obs = normalize_obs
         self._normalize_act = normalize_act
 
-        self._clip_rews = self._get_clip_rewards()
         self._set_spaces()
         self._set_stats()
 
@@ -113,15 +118,6 @@ class ExpertDataset(Dataset):
     @property
     def obs_rms(self):
         return self._obs_rms
-
-    def _get_clip_rewards(self):
-        returns = []
-        for dset in self._dsets:
-            clip_returns = []
-            keys = [k for k in dset.keys() if k.startswith('CMU')]
-            clip_returns = [dset[f"{k}/episode_rewards"][...] / dset[f"{k}/episode_lengths"][...] for k in keys]
-            returns.append(np.mean(clip_returns))
-        return np.array(returns, dtype=np.float32)
 
     def _set_spaces(self):
         # Observation space for all observables in the dataset
@@ -218,16 +214,25 @@ class ExpertDataset(Dataset):
         self._total_len = 0
         self._dset_indices = []
         self._logical_indices, self._dset_groups = [[] for _ in self._dsets], [[] for _ in self._dsets]
-        iterator = zip(self._dsets, self._clip_ids, self._logical_indices, self._dset_groups)
-        for dset, clip_ids, logical_indices, dset_groups in iterator:
+        self._clip_returns = [{} for _ in self._dsets]
+        iterator = zip(self._dsets, self._clip_ids, self._logical_indices, self._dset_groups, self._clip_returns)
+        for dset, clip_ids, logical_indices, dset_groups, clip_return in iterator:
             self._dset_indices.append(self._total_len)
             for clip_id in clip_ids:
-                for i, ep_len in enumerate(dset[f"{clip_id}/episode_lengths"]):
+                ret_iterator = itertools.chain(dset[f"{clip_id}/start_metrics/norm_episode_returns"],
+                                               dset[f"{clip_id}/rsi_metrics/norm_episode_returns"])
+                returns = [x for x in ret_iterator]
+                clip_return[clip_id] = np.mean(returns)
+
+                len_iterator = itertools.chain(dset[f"{clip_id}/start_metrics/episode_lengths"],
+                                               dset[f"{clip_id}/rsi_metrics/episode_lengths"])
+                for i, ep_len in enumerate(len_iterator):
                     logical_indices.append(self._total_len)
                     dset_groups.append(f"{clip_id}/{i}")
                     if ep_len < self._min_seq_steps:
                         continue
                     self._total_len += ep_len - (self._min_seq_steps-1)
+        self._avg_return = np.mean(list(itertools.chain(*[d.values() for d in self._clip_returns])))
 
     def _preload_dataset(self):
         self._obs_dsets, self._act_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets]
@@ -257,6 +262,8 @@ class ExpertDataset(Dataset):
         else:
             obs_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
             act_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
+        val_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/values"]
+        adv_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
 
         if self.is_sequential:
             start_idx = idx - self._logical_indices[dset_idx][clip_idx]
@@ -287,9 +294,22 @@ class ExpertDataset(Dataset):
                 obs = np.concatenate(list(obs.values()), axis=-1)
 
         if self._temperature is None:
-            weight = np.array(1., dtype=np.float32)
-        else:
-            adv = self._clip_rews[dset_idx] - np.mean(self._clip_rews)
-            weight = np.array(np.exp(adv / self._temperature), dtype=np.float32)
+            weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
+        elif self._clip_centric_weight:
+            key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
+            ret = self._clip_returns[dset_idx][key]
+            weight = np.exp(ret - self._avg_return / self._temperature)
+            if self.is_sequential:
+                weight = weight * np.ones(end_idx-start_idx)
+        else: # state-action weight
+            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
+            if self._advantage_weights:
+                energy = adv
+            else:
+                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
+                energy = val + adv
+            weight = np.exp(energy / self._temperature)
+
+        weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
         return obs, act, weight

@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Callable, Dict, Optional, Type, Union
 import gym
 
 from stable_baselines3.common.utils import set_random_seed
@@ -12,11 +12,13 @@ def make_vec_env(
     seed: Optional[int] = None,
     start_index: int = 0,
     monitor_dir: Optional[str] = None,
+    wrapper_class: Optional[Callable[[gym.Env], gym.Env]] = None,
     env_kwargs: Optional[Dict[str, Any]] = None,
     vec_env_cls: Optional[Type[Union[DummyVecEnv, SubprocVecEnv]]] = None,
     vec_env_kwargs: Optional[Dict[str, Any]] = None,
     vec_monitor_cls = VecMonitor,
     monitor_kwargs: Optional[Dict[str, Any]] = None,
+    wrapper_kwargs: Optional[Dict[str, Any]] = None,
 ) -> VecEnv:
     """
     Create a wrapped, monitored ``VecEnv``.
@@ -41,6 +43,7 @@ def make_vec_env(
     env_kwargs = {} if env_kwargs is None else env_kwargs
     vec_env_kwargs = {} if vec_env_kwargs is None else vec_env_kwargs
     monitor_kwargs = {} if monitor_kwargs is None else monitor_kwargs
+    wrapper_kwargs = {} if wrapper_kwargs is None else wrapper_kwargs
 
     def make_env(rank):
         def _init():
@@ -54,6 +57,8 @@ def make_vec_env(
                 rng = np.random.RandomState(seed=seed+rank)
                 env_kwargs['environment_kwargs']['random_state'] = rng
             env = env_id(**env_kwargs)
+            if wrapper_class is not None:
+                env = wrapper_class(env, **wrapper_kwargs)
             return env
 
         return _init
