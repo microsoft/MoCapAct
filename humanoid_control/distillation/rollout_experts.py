@@ -154,13 +154,13 @@ def get_expert_paths(input_dirs):
                 clips.add(clip_id)
                 idx = eval_npz['results'].mean(1).argmax()
                 ret = eval_npz['results'][idx].mean()
-                if expert_name not in expert_paths or ret > expert_metrics[expert_name]['ep_return']:
+                if expert_name not in expert_paths or ret > expert_metrics[expert_name]['ep_return'].mean():
                     expert_paths[expert_name] = path
                     expert_metrics[expert_name] = dict(
                         ep_return=eval_npz['results'][idx],
                         ep_length=eval_npz['ep_lengths'][idx],
                         ep_norm_return=eval_npz['results_norm'][idx],
-                        ep_norm_length=eval_npz['ep_lengths_norm']
+                        ep_norm_length=eval_npz['ep_lengths_norm'][idx]
                     )
     return expert_paths, expert_metrics, clips
 
