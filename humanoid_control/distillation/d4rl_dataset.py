@@ -6,12 +6,12 @@ from typing import Dict, List, Sequence, Text, Tuple, Optional, Union
 import urllib.request
 
 import numpy as np
-from torch.utils.data import Dataset
+from dataset import ExpertDataset
 from tqdm import tqdm
 
-class D4RLDataset(Dataset):
+class D4RLDataset(ExpertDataset):
     """
-    Base class for datasets respecting the D4rl interface.
+    Class for datasets respecting the D4rl interface.
     For reference, please check: https://github.com/rail-berkeley/d4rl
 
     Args:
@@ -20,17 +20,26 @@ class D4RLDataset(Dataset):
         ref_min_score: Minimum score (for score normalization)
     """
     
-    def __init__(self, dataset_url=None, ref_max_score=None, ref_min_score=None, **kwargs):
-        super(Dataset, self).__init__(**kwargs)
-        self.dataset_url = self._dataset_url = dataset_url
+    def __init__(
+        self,
+        h5py_fnames: Sequence[Text],
+        observables: Union[Sequence[Text], Dict[Text, Sequence[Text]]],
+        dataset_url=None,
+        ref_min_score=None,
+        ref_max_score=None, **kwargs
+    ):
+        self.dataset_url = dataset_url
+        dataset_path = self._download_dataset_from_url(dataset_url)
         self.ref_max_score = ref_max_score
         self.ref_min_score = ref_min_score
+        super(ExpertDataset, self).__init__([os.path.join(dataset_path, filename) for filename in h5py_fnames], observables, **kwargs)
+
 
     @staticmethod
-    def _filepath_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.d4rl/datasets')):
+    def _dataset_path_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.d4rl/datasets')):
         _, dataset_name = os.path.split(dataset_url)
-        dataset_filepath = os.path.join(dataset_local_path, dataset_name)
-        return dataset_filepath
+        dataset_path = os.path.join(dataset_local_path, dataset_name)
+        return dataset_path
 
     @staticmethod
     def _get_keys(h5file):
@@ -45,13 +54,13 @@ class D4RLDataset(Dataset):
 
     @staticmethod
     def _download_dataset_from_url(dataset_url):
-        dataset_filepath = D4RLDataset._filepath_from_url(dataset_url)
-        if not os.path.exists(dataset_filepath):
-            print('Downloading dataset:', dataset_url, 'to', dataset_filepath)
-            urllib.request.urlretrieve(dataset_url, dataset_filepath)
-        if not os.path.exists(dataset_filepath):
+        dataset_path = D4RLDataset._dataset_path_from_url(dataset_url)
+        if not os.path.exists(dataset_path):
+            print('Downloading dataset:', dataset_url, 'to', dataset_path)
+            urllib.request.urlretrieve(dataset_url, dataset_path)
+        if not os.path.exists(dataset_path):
             raise IOError("Failed to download dataset from %s" % dataset_url)
-        return dataset_filepath
+        return dataset_path
 
     @property
     def dataset_filepath(self):
@@ -62,9 +71,9 @@ class D4RLDataset(Dataset):
             raise ValueError("Reference score not provided for dataset")
         return (score - self.ref_min_score) / (self.ref_max_score - self.ref_min_score)
 
-    def get_d4rl_dataset_from_expert_rollouts(self, h5path=None, clip_ids: Optional[Sequence[Text]] = None):
+    def get_in_memory_rollouts(self, h5path=None, clip_ids: Optional[Sequence[Text]] = None):
         if h5path is None:
-            if self._dataset_url is None:
+            if self.dataset_url is None:
                 raise ValueError("D4RLDataset not configured with a dataset URL.")
             h5path = D4RLDataset._download_dataset_from_url(self.dataset_url)
 
@@ -84,7 +93,7 @@ class D4RLDataset(Dataset):
             self._clip_ids = [k for k in clip_ids if k in dset.keys()]
 
         obs, act, rews, terms = [], [], [], []
-        for clip_id in self._clip_ids:          
+        for clip_id in self._clip_ids:
             for episode in range(len(dset[f"{clip_id}/episode_lengths"])):
                 obs.append(dset[f"{clip_id}/{episode}/observations"][...])
                 act.append(dset[f"{clip_id}/{episode}/actions"][...])
@@ -92,7 +101,7 @@ class D4RLDataset(Dataset):
                 terminals = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
                 terminals[-1] = 1
                 terms.append(np.array(terminals))
-              
+
         data_dict = {
             'observations': np.concatenate(obs),
             'actions': np.concatenate(act),

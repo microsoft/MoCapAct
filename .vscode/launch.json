@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "aml-run",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}\\azureml_connector",
+            "program": "aml_launcher.py",
+            "justMyCode": false,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "local-run",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control\\distillation\\d4rl_dataset.py",
+            "args": [],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "python.envFile": "${workspaceFolder}/.env"
+        },
+    ]
+}
