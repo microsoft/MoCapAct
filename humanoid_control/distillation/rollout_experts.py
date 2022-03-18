@@ -164,6 +164,7 @@ def get_expert_paths(input_dirs):
     return expert_paths, expert_metrics, clips
 
 def collect_rollouts(clip_path, always_init_at_clip_start):
+    print(clip_path)
     # Make environment
     with open(osp.join(clip_path, 'clip_info.json')) as f:
         clip_info = json.load(f)
@@ -250,13 +251,13 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
         for i in range(FLAGS.n_workers):
             curr_actions[i].append(act[i])
             curr_rewards[i].append(rews[i])
-            try:
-                curr_values[i].append(val[i])
-            except IndexError:
-                print(clip_path)
-                print(FLAGS.n_workers)
-                print(val)
-                raise
+            #try:
+            curr_values[i].append(val[i])
+            #except IndexError:
+            #    print(clip_path)
+            #    print(FLAGS.n_workers)
+            #    print(val)
+            #    raise
             if dones[i]:
                 # Add terminal observation
                 for k, v in infos[i]['terminal_observation'].items():
