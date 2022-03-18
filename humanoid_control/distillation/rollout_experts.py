@@ -252,7 +252,7 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
             curr_rewards[i].append(rews[i])
             try:
                 curr_values[i].append(val[i])
-            except:
+            except IndexError:
                 print(clip_path)
                 print(FLAGS.n_workers)
                 print(val)
