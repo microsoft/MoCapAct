@@ -244,7 +244,6 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
         with torch.no_grad():
             val_norm = model.policy.predict_values(obs_th).squeeze(1).cpu().numpy()
             val = norm_env.unnormalize_reward(val_norm)
-            breakpoint()
 
         act, _ = model.policy.predict(obs, deterministic=True)
         obs, rews, dones, infos = vec_env.step(act)
@@ -254,6 +253,7 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
             try:
                 curr_values[i].append(val[i])
             except:
+                print(clip_path)
                 print(FLAGS.n_workers)
                 print(val)
                 raise
