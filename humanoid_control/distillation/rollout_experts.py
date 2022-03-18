@@ -90,7 +90,6 @@ import os.path as osp
 import h5py
 import json
 import numpy as np
-import scipy.signal
 import torch
 from absl import app, flags, logging
 from tqdm import tqdm
@@ -245,13 +244,19 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
         with torch.no_grad():
             val_norm = model.policy.predict_values(obs_th).squeeze(1).cpu().numpy()
             val = norm_env.unnormalize_reward(val_norm)
+            breakpoint()
 
         act, _ = model.policy.predict(obs, deterministic=True)
         obs, rews, dones, infos = vec_env.step(act)
         for i in range(FLAGS.n_workers):
             curr_actions[i].append(act[i])
             curr_rewards[i].append(rews[i])
-            curr_values[i].append(val[i])
+            try:
+                curr_values[i].append(val[i])
+            except:
+                print(FLAGS.n_workers)
+                print(val)
+                raise
             if dones[i]:
                 # Add terminal observation
                 for k, v in infos[i]['terminal_observation'].items():
