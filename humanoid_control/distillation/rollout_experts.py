@@ -164,6 +164,7 @@ def get_expert_paths(input_dirs):
     return expert_paths, expert_metrics, clips
 
 def collect_rollouts(clip_path, always_init_at_clip_start):
+    print(clip_path)
     # Make environment
     with open(osp.join(clip_path, 'clip_info.json')) as f:
         clip_info = json.load(f)
