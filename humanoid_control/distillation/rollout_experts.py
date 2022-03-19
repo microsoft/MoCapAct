@@ -164,7 +164,6 @@ def get_expert_paths(input_dirs):
     return expert_paths, expert_metrics, clips
 
 def collect_rollouts(clip_path, always_init_at_clip_start):
-    print(clip_path)
     # Make environment
     with open(osp.join(clip_path, 'clip_info.json')) as f:
         clip_info = json.load(f)
@@ -244,20 +243,14 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
         obs_th, _ = model.policy.obs_to_tensor(obs)
         with torch.no_grad():
             val_norm = model.policy.predict_values(obs_th).squeeze(1).cpu().numpy()
-            val = norm_env.unnormalize_reward(val_norm)
+        val = norm_env.unnormalize_reward(val_norm)
 
         act, _ = model.policy.predict(obs, deterministic=True)
         obs, rews, dones, infos = vec_env.step(act)
         for i in range(FLAGS.n_workers):
             curr_actions[i].append(act[i])
             curr_rewards[i].append(rews[i])
-            #try:
             curr_values[i].append(val[i])
-            #except IndexError:
-            #    print(clip_path)
-            #    print(FLAGS.n_workers)
-            #    print(val)
-            #    raise
             if dones[i]:
                 # Add terminal observation
                 for k, v in infos[i]['terminal_observation'].items():
@@ -271,11 +264,11 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
                 all_values.append(np.array(curr_values[i]))
 
                 # GAE(lambda)
-                rew, val = curr_rewards[i], curr_values[i]
+                rew, value = curr_rewards[i], curr_values[i]
                 last_gae_lam, adv = 0, []
-                for step in reversed(range(len(val))):
-                    next_val = val[step+1] if step < len(val)-1 else 0.
-                    delta = rew[step] + model.gamma*next_val - val[step]
+                for step in reversed(range(len(value))):
+                    next_val = value[step+1] if step < len(value)-1 else 0.
+                    delta = rew[step] + model.gamma*next_val - value[step]
                     last_gae_lam = delta + model.gamma*model.gae_lambda*last_gae_lam
                     adv.insert(0, last_gae_lam)
                 all_advs.append(np.array(adv))
