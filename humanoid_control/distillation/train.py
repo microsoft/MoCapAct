@@ -53,7 +53,7 @@ flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation
 eval_config = ml_collections.ConfigDict()
 eval_config.freq = int(1e5)
 eval_config.n_episodes = 2500
-eval_config.act_noise = 0.01
+eval_config.act_noise = 0.
 eval_config.min_steps = 15
 eval_config.termination_error_threshold = 0.3
 eval_config.n_workers = 8
