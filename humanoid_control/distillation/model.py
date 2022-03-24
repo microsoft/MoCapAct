@@ -780,9 +780,9 @@ class GPTPolicy(BasePolicy):
         obs, act, weights = batch
         features = self.extract_features(obs)
         act_gaussian, = self(features)
-        loss = -weights @ act_gaussian.log_prob(act)
+        loss = -weights[:, -1] @ act_gaussian.log_prob(act)
         mse = F.mse_loss(act, act_gaussian.mean)
-        self.log("loss/mse", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/mse", mse, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         return loss
 

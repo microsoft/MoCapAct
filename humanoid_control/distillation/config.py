@@ -68,7 +68,7 @@ def get_config(config_string):
                 resid_pdrop=0.1,
                 attn_pdrop=0.1,
                 weight_decay=0.1,
-                observables=observables.OBSERVABLES_SANS_REFERENCE
+                observables=observables.HIGH_LEVEL_OBSERVABLES_SANS_REFERENCE
                 ))
             }),
         #'hierarchical_gpt': ConfigDict({

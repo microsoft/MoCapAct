@@ -90,7 +90,6 @@ import os.path as osp
 import h5py
 import json
 import numpy as np
-import scipy.signal
 import torch
 from absl import app, flags, logging
 from tqdm import tqdm
@@ -154,17 +153,18 @@ def get_expert_paths(input_dirs):
                 clips.add(clip_id)
                 idx = eval_npz['results'].mean(1).argmax()
                 ret = eval_npz['results'][idx].mean()
-                if expert_name not in expert_paths or ret > expert_metrics[expert_name]['ep_return']:
+                if expert_name not in expert_paths or ret > expert_metrics[expert_name]['ep_return'].mean():
                     expert_paths[expert_name] = path
                     expert_metrics[expert_name] = dict(
                         ep_return=eval_npz['results'][idx],
                         ep_length=eval_npz['ep_lengths'][idx],
                         ep_norm_return=eval_npz['results_norm'][idx],
-                        ep_norm_length=eval_npz['ep_lengths_norm']
+                        ep_norm_length=eval_npz['ep_lengths_norm'][idx]
                     )
     return expert_paths, expert_metrics, clips
 
 def collect_rollouts(clip_path, always_init_at_clip_start):
+    print(clip_path)
     # Make environment
     with open(osp.join(clip_path, 'clip_info.json')) as f:
         clip_info = json.load(f)
@@ -244,7 +244,7 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
         obs_th, _ = model.policy.obs_to_tensor(obs)
         with torch.no_grad():
             val_norm = model.policy.predict_values(obs_th).squeeze(1).cpu().numpy()
-            val = norm_env.unnormalize_reward(val_norm)
+        val = norm_env.unnormalize_reward(val_norm)
 
         act, _ = model.policy.predict(obs, deterministic=True)
         obs, rews, dones, infos = vec_env.step(act)
@@ -265,11 +265,11 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
                 all_values.append(np.array(curr_values[i]))
 
                 # GAE(lambda)
-                rew, val = curr_rewards[i], curr_values[i]
+                rew, value = curr_rewards[i], curr_values[i]
                 last_gae_lam, adv = 0, []
-                for step in reversed(range(len(val))):
-                    next_val = val[step+1] if step < len(val)-1 else 0.
-                    delta = rew[step] + model.gamma*next_val - val[step]
+                for step in reversed(range(len(value))):
+                    next_val = value[step+1] if step < len(value)-1 else 0.
+                    delta = rew[step] + model.gamma*next_val - value[step]
                     last_gae_lam = delta + model.gamma*model.gae_lambda*last_gae_lam
                     adv.insert(0, last_gae_lam)
                 all_advs.append(np.array(adv))
