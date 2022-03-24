@@ -4,10 +4,11 @@ import collections
 import itertools
 from typing import Dict, List, Sequence, Text, Tuple, Optional, Union
 import urllib.request
-
 import numpy as np
-from dataset import ExpertDataset
 from tqdm import tqdm
+
+from humanoid_control import observables
+from humanoid_control.distillation.dataset import ExpertDataset
 
 class D4RLDataset(ExpertDataset):
     """
@@ -19,12 +20,12 @@ class D4RLDataset(ExpertDataset):
         ref_max_score: Maximum score (for score normalization)
         ref_min_score: Minimum score (for score normalization)
     """
-    
+
     def __init__(
         self,
+        dataset_url,
         h5py_fnames: Sequence[Text],
         observables: Union[Sequence[Text], Dict[Text, Sequence[Text]]],
-        dataset_url=None,
         ref_min_score=None,
         ref_max_score=None, **kwargs
     ):
@@ -34,9 +35,8 @@ class D4RLDataset(ExpertDataset):
         self.ref_min_score = ref_min_score
         super(ExpertDataset, self).__init__([os.path.join(dataset_path, filename) for filename in h5py_fnames], observables, **kwargs)
 
-
     @staticmethod
-    def _dataset_path_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.d4rl/datasets')):
+    def _dataset_path_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.datasets')):
         _, dataset_name = os.path.split(dataset_url)
         dataset_path = os.path.join(dataset_local_path, dataset_name)
         return dataset_path
@@ -78,42 +78,47 @@ class D4RLDataset(ExpertDataset):
             h5path = D4RLDataset._download_dataset_from_url(self.dataset_url)
 
         with h5py.File(h5path, 'r') as dataset_file:
-            data_dict = self._load_data(dataset_file, clip_ids)
+            data_dict = self._load_dataset_in_memory(dataset_file, clip_ids)
 
         self._sanity_check(data_dict)
 
         return data_dict
 
-    def _load_data(self, dset, clip_ids: Optional[Sequence[Text]] = None):
-        self._clip_ids = []
-
+    def _load_dataset_in_memory(self, dset, clip_ids: Optional[Sequence[Text]] = None):
+        clip_ids = []
         if clip_ids is None:
-            self._clip_ids = [k for k in dset.keys() if k.startswith('CMU')]
+            clip_ids = [k for k in dset.keys() if k.startswith('CMU')]
         else:
-            self._clip_ids = [k for k in clip_ids if k in dset.keys()]
+            clip_ids = [k for k in clip_ids if k in dset.keys()]
 
-        obs, act, rews, terms = [], [], [], []
-        for clip_id in self._clip_ids:
-            for episode in range(len(dset[f"{clip_id}/episode_lengths"])):
+        obs, act, rews, terminals, timeouts = [], [], [], [], []
+        for clip_id in clip_ids:
+            for episode in range(len(dset[f"{clip_id}/loaded_metrics/episode_lengths"])):
                 obs.append(dset[f"{clip_id}/{episode}/observations"][...])
                 act.append(dset[f"{clip_id}/{episode}/actions"][...])
                 rews.append(dset[f"{clip_id}/{episode}/rewards"][...])
-                terminals = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
-                terminals[-1] = 1
-                terms.append(np.array(terminals))
+                episode_terminals = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
+                episode_timeouts = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
+                if dset[f"{clip_id}/early_termination"]:
+                    episode_terminals[-1] = 1
+                else:
+                    episode_timeouts[-1] = 1
+                terminals.append(np.array(terminals))
+                timeouts.append(np.array(timeouts))
 
         data_dict = {
             'observations': np.concatenate(obs),
             'actions': np.concatenate(act),
             'rewards': np.concatenate(rews),
-            'terminals': np.concatenate(terms),
+            'terminals': np.concatenate(terminals),
+            'timeouts': np.concatenate(timeouts),
         }
 
         return data_dict
 
     def _sanity_check(self, data_dict):
         # Run a few quick sanity checks
-        for key in ['observations', 'actions', 'rewards', 'terminals']:
+        for key in ['observations', 'actions', 'rewards', 'terminals', 'timeouts']:
             assert key in data_dict, 'Dataset is missing key %s' % key
         N_samples = data_dict['observations'].shape[0]
         if self.observation_space.shape is not None:
@@ -131,8 +136,16 @@ class D4RLDataset(ExpertDataset):
             data_dict['terminals'] = data_dict['terminals'][:, 0]
         assert data_dict['terminals'].shape == (N_samples,), 'Terminals has wrong shape: %s' % (
             str(data_dict['rewards'].shape))
-
+        if data_dict['timeouts'].shape == (N_samples, 1):
+            data_dict['timeouts'] = data_dict['timeouts'][:, 0]
+        assert data_dict['timeouts'].shape == (N_samples,), 'Timeouts has wrong shape: %s' % (
+            str(data_dict['timeouts'].shape))
 
 if __name__ == "__main__":
-    dset = D4RLDataset()
-    dset.get_d4rl_dataset_from_expert_rollouts(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'CMU_016_22.hdf5'))
+    dset = D4RLDataset(
+        dataset_url='https://rlnexusstorage2.blob.core.windows.net/00-share-data/humanoid_control/public/example.hdf5?sv=2020-10-02&st=2022-03-24T02%3A30%3A48Z&se=2022-07-01T02%3A30%3A00Z&sr=b&sp=r&sig=mZ2EUrx%2Bv6gdkzHCHgussSSzoASK04JL9q%2BaiKks5Oc%3D',
+        h5py_fnames=['example.hdf5'],
+        observables=observables.TIME_INDEX_OBSERVABLES
+    )
+    sample = dset[0]
+    d4rl_data_dict = dset.get_in_memory_rollouts(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5'))

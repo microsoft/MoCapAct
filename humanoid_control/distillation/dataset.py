@@ -1,3 +1,4 @@
+import os
 import bisect
 import h5py
 import itertools
@@ -13,7 +14,7 @@ from humanoid_control import observables
 def weighted_average(arrays, weights):
     total = 0
     for array, weight in zip(arrays, weights):
-        total += weight*array
+        total += weight * array
     return total / sum(weights)
 
 class ExpertDataset(Dataset):
@@ -130,11 +131,10 @@ class ExpertDataset(Dataset):
         self._full_observation_space = spaces.Dict(obs_spaces)
 
         # Observation space for the observables we're considering
-        if not isinstance(self._observables, collections.abc.Sequence): # observables is Dict[Text, Sequence[Text]]
+        if not isinstance(self._observables, collections.abc.Sequence):  # observables is Dict[Text, Sequence[Text]]
             if self._concat_observables:
                 observation_indices = {
-                    k: np.concatenate([self.observable_indices[observable][...]
-                                    for observable in subobservables])
+                    k: np.concatenate([self.observable_indices[observable][...] for observable in subobservables])
                     for k, subobservables in self._observables.items()
                 }
                 self._observation_space = spaces.Dict({
@@ -231,17 +231,18 @@ class ExpertDataset(Dataset):
                     dset_groups.append(f"{clip_id}/{i}")
                     if ep_len < self._min_seq_steps:
                         continue
-                    self._total_len += ep_len - (self._min_seq_steps-1)
+                    self._total_len += ep_len - (self._min_seq_steps - 1)
         self._avg_return = np.mean(list(itertools.chain(*[d.values() for d in self._clip_returns])))
 
     def _preload_dataset(self):
-        self._obs_dsets, self._act_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets]
-        iterator = zip(self._dsets, self._clip_ids, self._obs_dsets, self._act_dsets)
-        for dset, clip_ids, obs_dset, act_dset in iterator:
+        self._obs_dsets, self._act_dsets, self._rew_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets], [[] for _ in self._dsets]
+        iterator = zip(self._dsets, self._clip_ids, self._obs_dsets, self._act_dsets, self._rew_dsets)
+        for dset, clip_ids, obs_dset, act_dset, rew_dset in iterator:
             for clip_id in clip_ids:
                 for i in range(len(dset[f"{clip_id}/episode_lengths"])):
                     obs_dset.append(dset[f"{clip_id}/{i}/observations"][...])
                     act_dset.append(dset[f"{clip_id}/{i}/actions"][...])
+                    rew_dset.append(dset[f"{clip_id}/{i}/rewards"][...])
 
     def _extract_observations(self, all_obs: np.ndarray, observable_keys: Sequence[Text]):
         return {k: all_obs[..., self.observable_indices[k][...]] for k in observable_keys}
@@ -253,33 +254,38 @@ class ExpertDataset(Dataset):
         """
         TODO
         """
-        dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
-        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx)-1
+        dset_idx = bisect.bisect_right(self._dset_indices, idx) - 1
+        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx) - 1
 
         if self._preload:
             obs_dset = self._obs_dsets[dset_idx][clip_idx]
             act_dset = self._act_dsets[dset_idx][clip_idx]
+            rew_dset = self._rew_dsets[dset_idx][clip_idx]
         else:
             obs_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
             act_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
+            rew_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/rewards"]
+
         val_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/values"]
         adv_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
 
         if self.is_sequential:
             start_idx = idx - self._logical_indices[dset_idx][clip_idx]
-            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
+            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
             all_obs = obs_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
+            rew = rew_dset[start_idx:end_idx]
         else:
             rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
             all_obs = obs_dset[rel_idx]
             act = act_dset[rel_idx]
+            rew = rew_dset[rel_idx]
 
         if self._normalize_obs:
             all_obs = (all_obs - self.obs_mean) / self.obs_std
         if self._normalize_act:
             act = (act - self.act_mean) / self.act_std
-        
+
         # Extract observation
         if isinstance(self._observables, dict):
             obs = {
@@ -294,14 +300,14 @@ class ExpertDataset(Dataset):
                 obs = np.concatenate(list(obs.values()), axis=-1)
 
         if self._temperature is None:
-            weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
+            weight = np.ones(end_idx - start_idx) if self.is_sequential else 1.
         elif self._clip_centric_weight:
             key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
             ret = self._clip_returns[dset_idx][key]
             weight = np.exp(ret - self._avg_return / self._temperature)
             if self.is_sequential:
-                weight = weight * np.ones(end_idx-start_idx)
-        else: # state-action weight
+                weight = weight * np.ones(end_idx - start_idx)
+        else:  # state-action weight
             adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
             if self._advantage_weights:
                 energy = adv
@@ -312,4 +318,17 @@ class ExpertDataset(Dataset):
 
         weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
-        return obs, act, weight
+        if obs_dset.shape[0] == rel_idx:
+            terminal = self._dsets[dset_idx][f"{self._all_clip_ids[clip_idx]}/early_termination"][clip_idx]
+            timeout = not terminal
+
+        return obs, act, rew, weight, terminal, timeout
+
+if __name__ == "__main__":
+    dset = ExpertDataset(
+        [os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5')],
+        observables.MULTI_CLIP_OBSERVABLES_SANS_ID
+    )
+
+    sample = dset[100]
+    print(sample)
