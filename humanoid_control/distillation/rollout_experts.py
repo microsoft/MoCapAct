@@ -318,7 +318,7 @@ def create_dataset(expert_paths, expert_metrics, output_path):
         all_rewards = start_results['rewards'] + rsi_results['rewards']
         all_advantages = start_results['advantages'] + rsi_results['advantages']
         all_values = start_results['values'] + rsi_results['values']
-        all_early_terminations = start_results['early_terminations'] + rsi_results['early_terminations']
+        all_early_terminations = np.concatenate([start_results['early_terminations'], rsi_results['early_terminations']])
 
         for i in range(len(all_actions)): # iterate over episodes
             rollout_subgrp = clip_grp.create_group(str(i))
