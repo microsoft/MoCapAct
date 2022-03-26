@@ -388,6 +388,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         embedding_kl_weight: float = 0.1,
         embedding_correlation: float = 0.95,
         seq_steps: int = 30,
+        truncated_bptt_steps: Optional[int] = None,
         activation_fn: Text = 'torch.nn.Tanh',
         squash_output: bool = False,
         std_dev: float = 0.1,
@@ -412,6 +413,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         self.embedding_correlation = embedding_correlation
         self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
         self.seq_steps = seq_steps
+        self.truncated_bptt_steps = min(truncated_bptt_steps, seq_steps) if truncated_bptt_steps else seq_steps
 
         reference_encoder_layers = torch_layers.create_mlp(
             self.features_extractor.sub_features_dim['ref_encoder'] + self.embed_size,
@@ -479,13 +481,16 @@ class HierarchicalRnnPolicy(BasePolicy):
 
         return act_gaussian, embed_gaussian, embed
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, hiddens):
         obs, acts, weights = batch
         features = self.extract_features(obs)
         references, proprios = features['ref_encoder'], features['decoder']
         B, T, _ = acts.shape
-        embed = torch.as_tensor(self.initial_state(B))
-        embed = embed.type_as(acts)
+        if hiddens is None:
+            embed = torch.as_tensor(self.initial_state(B))
+            embed = embed.type_as(acts)
+        else:
+            embed = hiddens
         total_log_prob, total_mse, total_kl, total_embed_std, total_embed_dist = 0, 0, 0, 0, 0
         all_embeds = [embed]
         for t in range(T):
@@ -508,16 +513,15 @@ class HierarchicalRnnPolicy(BasePolicy):
         embed_mean = torch.norm(torch.mean(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
         embed_std = torch.norm(torch.std(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
 
-
         loss = (-total_log_prob + self.embedding_kl_weight*total_kl) / T
         self.log("loss/mse", total_mse/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/kl_div", kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/kl_div", total_kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/delta_mean", total_embed_dist/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/delta_std", total_embed_std/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/embed_mean", embed_mean, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/embed_std", embed_std, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        return loss
+        return dict(loss=loss, hiddens=embed)
 
     def _predict(
         self,
@@ -529,6 +533,17 @@ class HierarchicalRnnPolicy(BasePolicy):
         references, proprios = features['ref_encoder'], features['decoder']
         act_gaussian, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
         return act_gaussian.mean, next_embed
+
+    def tbptt_split_batch(self, batch, split_size):
+        obs, acts, weights = batch
+        T = acts.shape[1]
+        splits = []
+        for t in range(0, T, split_size):
+            obs_subseq = {k: v[:, t:t+split_size] for k, v in obs.items()}
+            acts_subseq = acts[:, t:t+split_size]
+            weights_subseq = weights[:, t:t+split_size]
+            splits.append((obs_subseq, acts_subseq, weights_subseq))
+        return splits
 
 class GPTConfig:
     """ base GPT config, params common to all GPT versions """
