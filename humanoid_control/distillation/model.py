@@ -511,7 +511,7 @@ class HierarchicalRnnPolicy(BasePolicy):
 
         loss = (-total_log_prob + self.embedding_kl_weight*total_kl) / T
         self.log("loss/mse", total_mse/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/kl_div", kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/kl_div", total_kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/delta_mean", total_embed_dist/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/delta_std", total_embed_std/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
