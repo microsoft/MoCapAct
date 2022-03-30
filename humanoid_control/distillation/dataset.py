@@ -272,17 +272,23 @@ class ExpertDataset(Dataset):
         if self.is_sequential:
             start_idx = idx - self._logical_indices[dset_idx][clip_idx]
             end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
+            next_obs_start_idx = end_idx
+            next_obs_end_idx = min(next_obs_start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
+
             all_obs = obs_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
             rew = rew_dset[start_idx:end_idx]
+            all_next_obs = obs_dset[next_obs_start_idx:next_obs_end_idx]
         else:
             rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
             all_obs = obs_dset[rel_idx]
+            all_next_obs = obs_dset[rel_idx + 1]
             act = act_dset[rel_idx]
             rew = rew_dset[rel_idx]
 
         if self._normalize_obs:
             all_obs = (all_obs - self.obs_mean) / self.obs_std
+            all_next_obs = (all_next_obs - self.obs_mean) / self.obs_std
         if self._normalize_act:
             act = (act - self.act_mean) / self.act_std
 
@@ -292,12 +298,19 @@ class ExpertDataset(Dataset):
                 k: self._extract_observations(all_obs, observable_keys)
                 for k, observable_keys in self._observables.items()
             }
+            next_obs = {
+                k: self._extract_observations(all_next_obs, observable_keys)
+                for k, observable_keys in self._observables.items()
+            }
             if self._concat_observables:
                 obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in obs.items()}
+                next_obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in next_obs.items()}
         else:
             obs = self._extract_observations(all_obs, self._observables)
+            next_obs = self._extract_observations(all_next_obs, self._observables)
             if self._concat_observables:
                 obs = np.concatenate(list(obs.values()), axis=-1)
+                next_obs = np.concatenate(list(next_obs.values()), axis=-1)
 
         if self._temperature is None:
             weight = np.ones(end_idx - start_idx) if self.is_sequential else 1.
@@ -322,7 +335,7 @@ class ExpertDataset(Dataset):
             terminal = self._dsets[dset_idx][f"{self._all_clip_ids[clip_idx]}/early_termination"][clip_idx]
             timeout = not terminal
 
-        return obs, act, rew, weight, terminal, timeout
+        return obs, act, rew, next_obs, terminal, timeout, weight
 
 if __name__ == "__main__":
     dset = ExpertDataset(
