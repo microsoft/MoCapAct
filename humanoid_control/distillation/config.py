@@ -52,6 +52,7 @@ def get_config(config_string):
                 embedding_kl_weight=0.1,
                 embedding_correlation=0.95,
                 seq_steps=30,
+                truncated_bptt_steps=30,
                 activation_fn='torch.nn.Tanh',
                 squash_output=True,
                 observables=observables.HIERARCHICAL_OBSERVABLES
