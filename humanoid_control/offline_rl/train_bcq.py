@@ -8,6 +8,7 @@ import ml_collections
 from ml_collections.config_flags import config_flags
 import numpy as np
 import torch
+import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 
@@ -96,9 +97,9 @@ def main(_):
         seq_steps = 1
 
     train_dataset = D4RLDataset(
-        FLAGS.train_dataset_file_names,
-        observables.TIME_INDEX_OBSERVABLES,
-        FLAGS.clip_ids,
+        observables=observables.TIME_INDEX_OBSERVABLES,
+        h5py_fnames=FLAGS.train_dataset_file_names,
+        clip_ids=FLAGS.clip_ids,
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
         normalize_obs=False,  # FLAGS.normalize_obs,
@@ -109,9 +110,9 @@ def main(_):
 
     if FLAGS.val_dataset_file_names is not None:
         val_dataset = D4RLDataset(
-            FLAGS.val_dataset_file_names,
-            FLAGS.model.config.observables,
-            FLAGS.clip_ids,
+            observables=FLAGS.model.config.observables,
+            h5py_fnames=FLAGS.val_dataset_file_names,
+            clip_ids=FLAGS.clip_ids,
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=FLAGS.normalize_obs,

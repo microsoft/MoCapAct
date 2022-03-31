@@ -254,89 +254,66 @@ class ExpertDataset(Dataset):
         """
         TODO
         """
-        dset_idx = bisect.bisect_right(self._dset_indices, idx) - 1
-        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx) - 1
+        dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
+        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx)-1
 
         if self._preload:
             obs_dset = self._obs_dsets[dset_idx][clip_idx]
             act_dset = self._act_dsets[dset_idx][clip_idx]
-            rew_dset = self._rew_dsets[dset_idx][clip_idx]
         else:
             obs_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
             act_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
-            rew_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/rewards"]
-
         val_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/values"]
         adv_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
 
         if self.is_sequential:
             start_idx = idx - self._logical_indices[dset_idx][clip_idx]
-            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
-            next_obs_start_idx = end_idx
-            next_obs_end_idx = min(next_obs_start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
-
+            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
             all_obs = obs_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
-            rew = rew_dset[start_idx:end_idx]
-            all_next_obs = obs_dset[next_obs_start_idx:next_obs_end_idx]
         else:
             rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
             all_obs = obs_dset[rel_idx]
-            all_next_obs = obs_dset[rel_idx + 1]
             act = act_dset[rel_idx]
-            rew = rew_dset[rel_idx]
 
         if self._normalize_obs:
             all_obs = (all_obs - self.obs_mean) / self.obs_std
-            all_next_obs = (all_next_obs - self.obs_mean) / self.obs_std
         if self._normalize_act:
             act = (act - self.act_mean) / self.act_std
-
+        
         # Extract observation
         if isinstance(self._observables, dict):
             obs = {
                 k: self._extract_observations(all_obs, observable_keys)
                 for k, observable_keys in self._observables.items()
             }
-            next_obs = {
-                k: self._extract_observations(all_next_obs, observable_keys)
-                for k, observable_keys in self._observables.items()
-            }
             if self._concat_observables:
                 obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in obs.items()}
-                next_obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in next_obs.items()}
         else:
             obs = self._extract_observations(all_obs, self._observables)
-            next_obs = self._extract_observations(all_next_obs, self._observables)
             if self._concat_observables:
                 obs = np.concatenate(list(obs.values()), axis=-1)
-                next_obs = np.concatenate(list(next_obs.values()), axis=-1)
 
         if self._temperature is None:
-            weight = np.ones(end_idx - start_idx) if self.is_sequential else 1.
+            weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
         elif self._clip_centric_weight:
             key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
             ret = self._clip_returns[dset_idx][key]
-            weight = np.exp(ret - self._avg_return / self._temperature)
+            weight = np.exp((ret - self._return_offset) / self._temperature)
             if self.is_sequential:
-                weight = weight * np.ones(end_idx - start_idx)
-        else:  # state-action weight
+                weight = weight * np.ones(end_idx-start_idx)
+        else: # state-action weight
             adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
             if self._advantage_weights:
-                energy = adv
+                energy = adv - self._advantage_offset
             else:
                 val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
-                energy = val + adv
+                energy = val + adv - self._q_value_offset
             weight = np.exp(energy / self._temperature)
 
         weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
-        terminal, timeout = False, False
-        if obs_dset.shape[0] == rel_idx:
-            terminal = self._dsets[dset_idx][f"{self._all_clip_ids[clip_idx]}/early_termination"][clip_idx]
-            timeout = not terminal
-
-        return obs, act, rew, next_obs, terminal, timeout, weight
+        return obs, act, weight
 
 if __name__ == "__main__":
     dset = ExpertDataset(

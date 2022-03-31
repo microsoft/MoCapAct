@@ -1,4 +1,5 @@
 import os
+import bisect
 import h5py
 import collections
 import itertools
@@ -87,15 +88,15 @@ class D4RLDataset(ExpertDataset):
             raise ValueError("Reference score not provided for dataset")
         return (score - self.ref_min_score) / (self.ref_max_score - self.ref_min_score)
 
-    def get_in_memory_rollouts(self, hdf5_paths: Optional[Sequence[Text]] = None, clip_ids: Optional[Sequence[Text]] = None):
-        if hdf5_paths is None:
+    def get_in_memory_rollouts(self, h5py_fpaths: Optional[Sequence[Text]] = None, clip_ids: Optional[Sequence[Text]] = None):
+        if h5py_fpaths is None:
             if self.dataset_url is None:
                 raise ValueError("D4RLDataset not configured with a dataset URL.")
             dataset_path = D4RLDataset._download_dataset_from_url(self.dataset_url)
-            hdf5_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith('.hdf5')]
+            h5py_fpaths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith('.hdf5')]
 
         data_dict = {}
-        for file_path in hdf5_paths:
+        for file_path in h5py_fpaths:
             with h5py.File(file_path, 'r') as dataset_file:
                 new_data = self._load_dataset_in_memory(dataset_file, clip_ids)
                 data_dict['observations'] = np.concatenate(data_dict['observations'], new_data['observations'])
@@ -164,11 +165,99 @@ class D4RLDataset(ExpertDataset):
         assert data_dict['timeouts'].shape == (N_samples,), 'Timeouts has wrong shape: %s' % (
             str(data_dict['timeouts'].shape))
 
+    def __getitem__(self, idx):
+        """
+        TODO
+        """
+        dset_idx = bisect.bisect_right(self._dset_indices, idx) - 1
+        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx) - 1
+
+        if self._preload:
+            obs_dset = self._obs_dsets[dset_idx][clip_idx]
+            act_dset = self._act_dsets[dset_idx][clip_idx]
+            rew_dset = self._rew_dsets[dset_idx][clip_idx]
+        else:
+            obs_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
+            act_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
+            rew_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/rewards"]
+
+        val_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/values"]
+        adv_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
+
+        if self.is_sequential:
+            start_idx = idx - self._logical_indices[dset_idx][clip_idx]
+            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
+            next_obs_start_idx = end_idx
+            next_obs_end_idx = min(next_obs_start_idx + self._max_seq_steps, act_dset.shape[0] + 1)
+
+            all_obs = obs_dset[start_idx:end_idx]
+            act = act_dset[start_idx:end_idx]
+            rew = rew_dset[start_idx:end_idx]
+            all_next_obs = obs_dset[next_obs_start_idx:next_obs_end_idx]
+        else:
+            rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
+            all_obs = obs_dset[rel_idx]
+            all_next_obs = obs_dset[rel_idx + 1]
+            act = act_dset[rel_idx]
+            rew = rew_dset[rel_idx]
+
+        if self._normalize_obs:
+            all_obs = (all_obs - self.obs_mean) / self.obs_std
+            all_next_obs = (all_next_obs - self.obs_mean) / self.obs_std
+        if self._normalize_act:
+            act = (act - self.act_mean) / self.act_std
+
+        # Extract observation
+        if isinstance(self._observables, dict):
+            obs = {
+                k: self._extract_observations(all_obs, observable_keys)
+                for k, observable_keys in self._observables.items()
+            }
+            next_obs = {
+                k: self._extract_observations(all_next_obs, observable_keys)
+                for k, observable_keys in self._observables.items()
+            }
+            if self._concat_observables:
+                obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in obs.items()}
+                next_obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in next_obs.items()}
+        else:
+            obs = self._extract_observations(all_obs, self._observables)
+            next_obs = self._extract_observations(all_next_obs, self._observables)
+            if self._concat_observables:
+                obs = np.concatenate(list(obs.values()), axis=-1)
+                next_obs = np.concatenate(list(next_obs.values()), axis=-1)
+
+        if self._temperature is None:
+            weight = np.ones(end_idx - start_idx) if self.is_sequential else 1.
+        elif self._clip_centric_weight:
+            key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
+            ret = self._clip_returns[dset_idx][key]
+            weight = np.exp(ret - self._avg_return / self._temperature)
+            if self.is_sequential:
+                weight = weight * np.ones(end_idx - start_idx)
+        else:  # state-action weight
+            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
+            if self._advantage_weights:
+                energy = adv
+            else:
+                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
+                energy = val + adv
+            weight = np.exp(energy / self._temperature)
+
+        weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
+
+        terminal, timeout = False, False
+        if obs_dset.shape[0] == rel_idx:
+            terminal = self._dsets[dset_idx][f"{self._all_clip_ids[clip_idx]}/early_termination"][clip_idx]
+            timeout = not terminal
+
+        return obs, act, rew, next_obs, terminal, timeout, weight
+
 if __name__ == "__main__":
     dset = D4RLDataset(
+        observables=observables.TIME_INDEX_OBSERVABLES,
         dataset_url='https://dilbertws7896891569.blob.core.windows.net/public?sv=2020-10-02&st=2022-03-31T02%3A16%3A46Z&se=2023-02-01T03%3A16%3A00Z&sr=c&sp=rl&sig=33NYiCqgT0m%2FWRU6kA638UrfxnVb%2FfBYaSkemYZPB14%3D',
         h5py_fnames=['example.hdf5'],
-        observables=observables.TIME_INDEX_OBSERVABLES
     )
     sample = dset[0]
     d4rl_data_dict = dset.get_in_memory_rollouts([os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5')])
