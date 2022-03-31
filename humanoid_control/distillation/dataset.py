@@ -331,6 +331,7 @@ class ExpertDataset(Dataset):
 
         weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
+        terminal, timeout = False, False
         if obs_dset.shape[0] == rel_idx:
             terminal = self._dsets[dset_idx][f"{self._all_clip_ids[clip_idx]}/early_termination"][clip_idx]
             timeout = not terminal

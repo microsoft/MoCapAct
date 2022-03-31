@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import tqdm
 
 from humanoid_control import observables
+from humanoid_control.utils import AzureBlobConnector
 from humanoid_control.distillation.dataset import ExpertDataset
 
 class D4RLDataset(ExpertDataset):
@@ -23,23 +24,29 @@ class D4RLDataset(ExpertDataset):
 
     def __init__(
         self,
-        dataset_url,
-        h5py_fnames: Sequence[Text],
         observables: Union[Sequence[Text], Dict[Text, Sequence[Text]]],
+        dataset_url: Optional[Text] = None,
+        dataset_local_path: Optional[Text] = None,
+        h5py_fnames: Optional[Sequence[Text]] = None,
         ref_min_score=None,
-        ref_max_score=None, **kwargs
+        ref_max_score=None,
+        **kwargs
     ):
         self.dataset_url = dataset_url
-        dataset_path = self._download_dataset_from_url(dataset_url)
+        self.dataset_local_path = dataset_local_path
+        if not self.dataset_local_path:
+            self.dataset_local_path = self._download_dataset_from_url(self.dataset_url)
+
         self.ref_max_score = ref_max_score
         self.ref_min_score = ref_min_score
-        super(ExpertDataset, self).__init__([os.path.join(dataset_path, filename) for filename in h5py_fnames], observables, **kwargs)
+        if h5py_fnames is None:
+            h5py_fnames = [f for f in os.listdir(self.dataset_local_path) if f.endswith('.hdf5')]
+
+        super().__init__([os.path.join(self.dataset_local_path, filename) for filename in h5py_fnames], observables, **kwargs)
 
     @staticmethod
-    def _dataset_path_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.datasets')):
-        _, dataset_name = os.path.split(dataset_url)
-        dataset_path = os.path.join(dataset_local_path, dataset_name)
-        return dataset_path
+    def _dataset_path_from_url(dataset_url, dataset_local_path=os.path.expanduser('~/.d4rl/datasets/humanoid_control')):
+        return dataset_local_path, dataset_url
 
     @staticmethod
     def _get_keys(h5file):
@@ -54,12 +61,21 @@ class D4RLDataset(ExpertDataset):
 
     @staticmethod
     def _download_dataset_from_url(dataset_url):
-        dataset_path = D4RLDataset._dataset_path_from_url(dataset_url)
+        dataset_path, dataset_url = D4RLDataset._dataset_path_from_url(dataset_url)
         if not os.path.exists(dataset_path):
             print('Downloading dataset:', dataset_url, 'to', dataset_path)
-            urllib.request.urlretrieve(dataset_url, dataset_path)
-        if not os.path.exists(dataset_path):
-            raise IOError("Failed to download dataset from %s" % dataset_url)
+            blob_connector = AzureBlobConnector(dataset_url)
+            for blob in blob_connector.list_blobs():
+                local_file_path = os.path.join(dataset_path, blob['name'])
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                blob_connector.download_and_save_blob(blob['name'], local_file_path)
+
+        dirs = os.listdir(dataset_path)
+        if len(dirs) > 1:
+            print("More than one root directory found for the dataset. Selecting the first one.")
+
+        dataset_path = os.path.join(dataset_path, dirs[0])
+
         return dataset_path
 
     @property
@@ -71,21 +87,28 @@ class D4RLDataset(ExpertDataset):
             raise ValueError("Reference score not provided for dataset")
         return (score - self.ref_min_score) / (self.ref_max_score - self.ref_min_score)
 
-    def get_in_memory_rollouts(self, h5path=None, clip_ids: Optional[Sequence[Text]] = None):
-        if h5path is None:
+    def get_in_memory_rollouts(self, hdf5_paths: Optional[Sequence[Text]] = None, clip_ids: Optional[Sequence[Text]] = None):
+        if hdf5_paths is None:
             if self.dataset_url is None:
                 raise ValueError("D4RLDataset not configured with a dataset URL.")
-            h5path = D4RLDataset._download_dataset_from_url(self.dataset_url)
+            dataset_path = D4RLDataset._download_dataset_from_url(self.dataset_url)
+            hdf5_paths = [os.path.join(dataset_path, f) for f in os.listdir(dataset_path) if f.endswith('.hdf5')]
 
-        with h5py.File(h5path, 'r') as dataset_file:
-            data_dict = self._load_dataset_in_memory(dataset_file, clip_ids)
+        data_dict = {}
+        for file_path in hdf5_paths:
+            with h5py.File(file_path, 'r') as dataset_file:
+                new_data = self._load_dataset_in_memory(dataset_file, clip_ids)
+                data_dict['observations'] = np.concatenate(data_dict['observations'], new_data['observations'])
+                data_dict['actions'] = np.concatenate(data_dict['actions'], new_data['actions'])
+                data_dict['rewards'] = np.concatenate(data_dict['rewards'], new_data['rewards'])
+                data_dict['terminals'] = np.concatenate(data_dict['terminals'], new_data['terminals'])
+                data_dict['timeouts'] = np.concatenate(data_dict['timeouts'], new_data['timeouts'])
 
         self._sanity_check(data_dict)
 
         return data_dict
 
     def _load_dataset_in_memory(self, dset, clip_ids: Optional[Sequence[Text]] = None):
-        clip_ids = []
         if clip_ids is None:
             clip_ids = [k for k in dset.keys() if k.startswith('CMU')]
         else:
@@ -93,13 +116,13 @@ class D4RLDataset(ExpertDataset):
 
         obs, act, rews, terminals, timeouts = [], [], [], [], []
         for clip_id in clip_ids:
-            for episode in range(len(dset[f"{clip_id}/loaded_metrics/episode_lengths"])):
+            for episode in range(len(dset[f"{clip_id}/rsi_metrics/episode_lengths"])):
                 obs.append(dset[f"{clip_id}/{episode}/observations"][...])
                 act.append(dset[f"{clip_id}/{episode}/actions"][...])
                 rews.append(dset[f"{clip_id}/{episode}/rewards"][...])
-                episode_terminals = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
-                episode_timeouts = [0] * dset[f"{clip_id}/episode_lengths"][...][episode]
-                if dset[f"{clip_id}/early_termination"]:
+                episode_terminals = [0] * dset[f"{clip_id}/rsi_metrics/episode_lengths"][...][episode]
+                episode_timeouts = [0] * dset[f"{clip_id}/rsi_metrics/episode_lengths"][...][episode]
+                if dset[f"{clip_id}/early_termination"][episode]:
                     episode_terminals[-1] = 1
                 else:
                     episode_timeouts[-1] = 1
@@ -143,9 +166,9 @@ class D4RLDataset(ExpertDataset):
 
 if __name__ == "__main__":
     dset = D4RLDataset(
-        dataset_url='https://rlnexusstorage2.blob.core.windows.net/00-share-data/humanoid_control/public/example.hdf5?sv=2020-10-02&st=2022-03-24T02%3A30%3A48Z&se=2022-07-01T02%3A30%3A00Z&sr=b&sp=r&sig=mZ2EUrx%2Bv6gdkzHCHgussSSzoASK04JL9q%2BaiKks5Oc%3D',
+        dataset_url='https://dilbertws7896891569.blob.core.windows.net/public?sv=2020-10-02&st=2022-03-31T02%3A16%3A46Z&se=2023-02-01T03%3A16%3A00Z&sr=c&sp=rl&sig=33NYiCqgT0m%2FWRU6kA638UrfxnVb%2FfBYaSkemYZPB14%3D',
         h5py_fnames=['example.hdf5'],
         observables=observables.TIME_INDEX_OBSERVABLES
     )
     sample = dset[0]
-    d4rl_data_dict = dset.get_in_memory_rollouts(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5'))
+    d4rl_data_dict = dset.get_in_memory_rollouts([os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5')])
