@@ -4,8 +4,8 @@ import itertools
 import collections
 import numpy as np
 from typing import Dict, List, Sequence, Text, Tuple, Optional, Union
+from scipy.special import logsumexp
 from gym import spaces
-from pandas import concat
 from torch.utils.data import Dataset
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 from humanoid_control import observables
@@ -31,7 +31,7 @@ class ExpertDataset(Dataset):
         clip_centric_weight: bool = False,
         advantage_weights: bool = True,
         temperature: Optional[float] = None,
-        max_weight: float = 20
+        max_weight: float = float('inf') #20.
     ):
         self._dsets = [h5py.File(fname, 'r') for fname in h5py_fnames]
         self._observables = observables
@@ -215,6 +215,7 @@ class ExpertDataset(Dataset):
         self._dset_indices = []
         self._logical_indices, self._dset_groups = [[] for _ in self._dsets], [[] for _ in self._dsets]
         self._clip_returns = [{} for _ in self._dsets]
+        all_advantages, all_values = [], []
         iterator = zip(self._dsets, self._clip_ids, self._logical_indices, self._dset_groups, self._clip_returns)
         for dset, clip_ids, logical_indices, dset_groups, clip_return in iterator:
             self._dset_indices.append(self._total_len)
@@ -231,8 +232,15 @@ class ExpertDataset(Dataset):
                     dset_groups.append(f"{clip_id}/{i}")
                     if ep_len < self._min_seq_steps:
                         continue
+                    all_advantages.append(dset[f"{clip_id}/{i}/advantages"][...])
+                    all_values.append(dset[f"{clip_id}/{i}/values"][...])
                     self._total_len += ep_len - (self._min_seq_steps-1)
-        self._avg_return = np.mean(list(itertools.chain(*[d.values() for d in self._clip_returns])))
+        all_clip_returns = list(itertools.chain(*[d.values() for d in self._clip_returns]))
+        all_advantages = np.concatenate(all_advantages)
+        all_values = np.concatenate(all_values)
+        self._return_offset = self._compute_offset(np.array(all_clip_returns))
+        self._advantage_offset = self._compute_offset(all_advantages)
+        self._q_value_offset = self._compute_offset(all_values + all_advantages)
 
     def _preload_dataset(self):
         self._obs_dsets, self._act_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets]
@@ -242,6 +250,14 @@ class ExpertDataset(Dataset):
                 for i in range(len(dset[f"{clip_id}/episode_lengths"])):
                     obs_dset.append(dset[f"{clip_id}/{i}/observations"][...])
                     act_dset.append(dset[f"{clip_id}/{i}/actions"][...])
+
+    def _compute_offset(self, array: np.ndarray):
+        """
+        Used to ensure the average data weight is approximately one.
+        """
+        if self._temperature is None:
+            return 0.
+        return self._temperature * logsumexp(array / self._temperature - np.log(array.size))
 
     def _extract_observations(self, all_obs: np.ndarray, observable_keys: Sequence[Text]):
         return {k: all_obs[..., self.observable_indices[k][...]] for k in observable_keys}
@@ -298,16 +314,16 @@ class ExpertDataset(Dataset):
         elif self._clip_centric_weight:
             key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
             ret = self._clip_returns[dset_idx][key]
-            weight = np.exp(ret - self._avg_return / self._temperature)
+            weight = np.exp((ret - self._return_offset) / self._temperature)
             if self.is_sequential:
                 weight = weight * np.ones(end_idx-start_idx)
         else: # state-action weight
             adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
             if self._advantage_weights:
-                energy = adv
+                energy = adv - self._advantage_offset
             else:
                 val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
-                energy = val + adv
+                energy = val + adv - self._q_value_offset
             weight = np.exp(energy / self._temperature)
 
         weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
