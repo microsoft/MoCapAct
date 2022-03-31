@@ -39,6 +39,7 @@ flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to R
 flags.DEFINE_integer("seed", 0, "RNG seed")
 flags.DEFINE_integer("progress_bar_refresh_rate", 1, "How often to refresh progress bar")
 flags.DEFINE_bool("track_grad_norm", False, "Whether to log the gradient norm")
+flags.DEFINE_bool("advantage_weights", True, "")
 flags.DEFINE_float("temperature", None, "AWR temperature")
 
 # Model hyperparameters
@@ -102,6 +103,7 @@ def main(_):
         max_seq_steps=seq_steps,
         normalize_obs=False, #FLAGS.normalize_obs,
         preload=FLAGS.preload_dataset,
+        advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
         concat_observables=False
     )
