@@ -140,6 +140,16 @@ class D4RLDataset(ExpertDataset):
 
         return data_dict
 
+    def _preload_dataset(self):
+        self._obs_dsets, self._act_dsets, self._rew_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets], [[] for _ in self._dsets]
+        iterator = zip(self._dsets, self._clip_ids, self._obs_dsets, self._act_dsets, self._rew_dsets)
+        for dset, clip_ids, obs_dset, act_dset, rew_dset in iterator:
+            for clip_id in clip_ids:
+                for i in range(len(dset[f"{clip_id}/episode_lengths"])):
+                    obs_dset.append(dset[f"{clip_id}/{i}/observations"][...])
+                    act_dset.append(dset[f"{clip_id}/{i}/actions"][...])
+                    rew_dset.append(dset[f"{clip_id}/{i}/rewards"][...])
+
     def _sanity_check(self, data_dict):
         # Run a few quick sanity checks
         for key in ['observations', 'actions', 'rewards', 'terminals', 'timeouts']:

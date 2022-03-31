@@ -1,12 +1,11 @@
-import os
 import bisect
 import h5py
 import itertools
 import collections
 import numpy as np
 from typing import Dict, List, Sequence, Text, Tuple, Optional, Union
+from scipy.special import logsumexp
 from gym import spaces
-from pandas import concat
 from torch.utils.data import Dataset
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 from humanoid_control import observables
@@ -14,7 +13,7 @@ from humanoid_control import observables
 def weighted_average(arrays, weights):
     total = 0
     for array, weight in zip(arrays, weights):
-        total += weight * array
+        total += weight*array
     return total / sum(weights)
 
 class ExpertDataset(Dataset):
@@ -32,7 +31,7 @@ class ExpertDataset(Dataset):
         clip_centric_weight: bool = False,
         advantage_weights: bool = True,
         temperature: Optional[float] = None,
-        max_weight: float = 20
+        max_weight: float = float('inf') #20.
     ):
         self._dsets = [h5py.File(fname, 'r') for fname in h5py_fnames]
         self._observables = observables
@@ -131,10 +130,11 @@ class ExpertDataset(Dataset):
         self._full_observation_space = spaces.Dict(obs_spaces)
 
         # Observation space for the observables we're considering
-        if not isinstance(self._observables, collections.abc.Sequence):  # observables is Dict[Text, Sequence[Text]]
+        if not isinstance(self._observables, collections.abc.Sequence): # observables is Dict[Text, Sequence[Text]]
             if self._concat_observables:
                 observation_indices = {
-                    k: np.concatenate([self.observable_indices[observable][...] for observable in subobservables])
+                    k: np.concatenate([self.observable_indices[observable][...]
+                                    for observable in subobservables])
                     for k, subobservables in self._observables.items()
                 }
                 self._observation_space = spaces.Dict({
@@ -215,6 +215,7 @@ class ExpertDataset(Dataset):
         self._dset_indices = []
         self._logical_indices, self._dset_groups = [[] for _ in self._dsets], [[] for _ in self._dsets]
         self._clip_returns = [{} for _ in self._dsets]
+        all_advantages, all_values = [], []
         iterator = zip(self._dsets, self._clip_ids, self._logical_indices, self._dset_groups, self._clip_returns)
         for dset, clip_ids, logical_indices, dset_groups, clip_return in iterator:
             self._dset_indices.append(self._total_len)
@@ -231,18 +232,32 @@ class ExpertDataset(Dataset):
                     dset_groups.append(f"{clip_id}/{i}")
                     if ep_len < self._min_seq_steps:
                         continue
-                    self._total_len += ep_len - (self._min_seq_steps - 1)
-        self._avg_return = np.mean(list(itertools.chain(*[d.values() for d in self._clip_returns])))
+                    all_advantages.append(dset[f"{clip_id}/{i}/advantages"][...])
+                    all_values.append(dset[f"{clip_id}/{i}/values"][...])
+                    self._total_len += ep_len - (self._min_seq_steps-1)
+        all_clip_returns = list(itertools.chain(*[d.values() for d in self._clip_returns]))
+        all_advantages = np.concatenate(all_advantages)
+        all_values = np.concatenate(all_values)
+        self._return_offset = self._compute_offset(np.array(all_clip_returns))
+        self._advantage_offset = self._compute_offset(all_advantages)
+        self._q_value_offset = self._compute_offset(all_values + all_advantages)
 
     def _preload_dataset(self):
-        self._obs_dsets, self._act_dsets, self._rew_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets], [[] for _ in self._dsets]
-        iterator = zip(self._dsets, self._clip_ids, self._obs_dsets, self._act_dsets, self._rew_dsets)
-        for dset, clip_ids, obs_dset, act_dset, rew_dset in iterator:
+        self._obs_dsets, self._act_dsets = [[] for _ in self._dsets], [[] for _ in self._dsets]
+        iterator = zip(self._dsets, self._clip_ids, self._obs_dsets, self._act_dsets)
+        for dset, clip_ids, obs_dset, act_dset in iterator:
             for clip_id in clip_ids:
                 for i in range(len(dset[f"{clip_id}/episode_lengths"])):
                     obs_dset.append(dset[f"{clip_id}/{i}/observations"][...])
                     act_dset.append(dset[f"{clip_id}/{i}/actions"][...])
-                    rew_dset.append(dset[f"{clip_id}/{i}/rewards"][...])
+
+    def _compute_offset(self, array: np.ndarray):
+        """
+        Used to ensure the average data weight is approximately one.
+        """
+        if self._temperature is None:
+            return 0.
+        return self._temperature * logsumexp(array / self._temperature - np.log(array.size))
 
     def _extract_observations(self, all_obs: np.ndarray, observable_keys: Sequence[Text]):
         return {k: all_obs[..., self.observable_indices[k][...]] for k in observable_keys}
