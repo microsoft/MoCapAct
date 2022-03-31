@@ -39,6 +39,8 @@ flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to R
 flags.DEFINE_integer("seed", 0, "RNG seed")
 flags.DEFINE_integer("progress_bar_refresh_rate", 1, "How often to refresh progress bar")
 flags.DEFINE_bool("track_grad_norm", False, "Whether to log the gradient norm")
+flags.DEFINE_bool("clip_centric_weight", False, "Whether to use a weight defined solely by the clip or also by the state and action")
+flags.DEFINE_bool("advantage_weights", True, "Whether to use AWR or RWR")
 flags.DEFINE_float("temperature", None, "AWR temperature")
 
 # Model hyperparameters
@@ -102,6 +104,8 @@ def main(_):
         max_seq_steps=seq_steps,
         normalize_obs=False, #FLAGS.normalize_obs,
         preload=FLAGS.preload_dataset,
+        clip_centric_weight=FLAGS.clip_centric_weight,
+        advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
         concat_observables=False
     )
@@ -109,12 +113,16 @@ def main(_):
     if FLAGS.val_dataset_paths is not None:
         val_dataset = dataset.ExpertDataset(
             FLAGS.val_dataset_paths,
-            FLAGS.model.config.observables,
+            observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
             FLAGS.clip_ids,
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
-            normalize_obs=FLAGS.normalize_obs,
-            preload=FLAGS.preload_dataset
+            normalize_obs=False, #FLAGS.normalize_obs,
+            preload=FLAGS.preload_dataset,
+            clip_centric_weight=FLAGS.clip_centric_weight,
+            advantage_weights=FLAGS.advantage_weights,
+            temperature=FLAGS.temperature,
+            concat_observables=False
         )
 
     if FLAGS.normalize_obs:
