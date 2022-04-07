@@ -4,6 +4,7 @@ import numpy as np
 import tree
 from gym import core
 from gym import spaces
+import mujoco
 
 from dm_control import composer
 from dm_control.locomotion.mocap import cmu_mocap_data
@@ -15,7 +16,6 @@ from dm_control.locomotion.tasks.reference_pose import utils
 from dm_control.locomotion.walkers import cmu_humanoid
 from dm_control.locomotion.walkers import initializers
 from dm_control.mujoco.wrapper import mjbindings
-mjlib = mjbindings.mjlib
 
 STANDING_HEIGHT = 1.8
 
@@ -47,7 +47,7 @@ class StandUpInitalizer(initializers.WalkerInitializer):
             is_stand = True
             timestep_features = self._stand_features
         utils.set_walker_from_features(physics, walker, timestep_features)
-        mjlib.mj_kinematics(physics.model.ptr, physics.data.ptr)
+        mujoco.mj_kinematics(physics.model.ptr, physics.data.ptr)
         if is_stand:
             height_perturb = random_state.uniform(0.1, 0.25)
             height_perturb = 0. # TODO: remove
