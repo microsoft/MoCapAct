@@ -8,6 +8,7 @@ import ml_collections
 from ml_collections.config_flags import config_flags
 import numpy as np
 import torch
+from torch.utils.data.dataloader import DataLoader
 import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
@@ -20,6 +21,7 @@ FLAGS = flags.FLAGS
 
 # Path flags
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
+flags.DEFINE_string("dataset_local_path", None, "Path to the dataset")
 flags.DEFINE_list("dataset_url", None, "URL to download the dataset")
 flags.DEFINE_list("train_dataset_file_names", None, "HDF5 names for the training")
 flags.DEFINE_list("val_dataset_file_names", None, "HDF5 names for the validation, if desired")
@@ -98,6 +100,7 @@ def main(_):
 
     train_dataset = D4RLDataset(
         observables=observables.TIME_INDEX_OBSERVABLES,
+        dataset_local_path=FLAGS.dataset_local_path,
         h5py_fnames=FLAGS.train_dataset_file_names,
         clip_ids=FLAGS.clip_ids,
         min_seq_steps=seq_steps,
@@ -111,6 +114,7 @@ def main(_):
     if FLAGS.val_dataset_file_names is not None:
         val_dataset = D4RLDataset(
             observables=FLAGS.model.config.observables,
+            dataset_local_path=FLAGS.dataset_local_path,
             h5py_fnames=FLAGS.val_dataset_file_names,
             clip_ids=FLAGS.clip_ids,
             min_seq_steps=seq_steps,
@@ -130,7 +134,7 @@ def main(_):
     else:
         obs_rms = None
 
-    obs, act, rew, weight, terminal, timeout = train_dataset[0]
+    obs, act, rew, next_obs, terminal, timeout, weight = train_dataset[0]
     obs_dim = obs.shape[0]
     action_dim = act.shape[0]
     max_action = float(train_dataset.action_space.high[0])
@@ -138,29 +142,16 @@ def main(_):
 
     # For saving files
     setting = f"{FLAGS.env_name}_{FLAGS.seed}"
-    buffer_name = f"{FLAGS.buffer_name}_{setting}"
 
     # Initialize policy
     policy = BCQ(obs_dim, action_dim, max_action, device, FLAGS.discount, FLAGS.tau, FLAGS.lmbda, FLAGS.phi)
 
-    # Load buffer
-    replay_buffer = bcq_utils.ReplayBuffer(obs_dim, action_dim, device)
-    N = FLAGS.max_timesteps
-    print('Loading buffer!')
-
-    for i in range(1, N - 1):
-        done = terminal or timeout
-        new_obs, new_act, new_rew, new_weight, new_terminal, new_timeout = train_dataset[i + 1]
-        replay_buffer.add(obs, act, new_obs, rew, done)
-        obs, act, rew, weight, terminal, timeout = new_obs, new_act, new_rew, new_weight, new_terminal, new_timeout
-
     evaluations = []
-    episode_num = 0
-    done = True
     training_iters = 0
-
+    replay_buffer = DataLoader(train_dataset, FLAGS.batch_size, num_workers=4, shuffle=True)
     while training_iters < FLAGS.max_timesteps:
         print('Train step:', training_iters)
+
         pol_vals = policy.train(replay_buffer, iterations=int(FLAGS.eval_freq), batch_size=FLAGS.batch_size)
 
         evaluations.append(eval_policy(policy, FLAGS.env_name, FLAGS.seed))

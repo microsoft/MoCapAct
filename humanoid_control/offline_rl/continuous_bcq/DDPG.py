@@ -8,7 +8,6 @@ import torch.nn.functional as F
 # Implementation of Deep Deterministic Policy Gradients (DDPG)
 # Paper: https://arxiv.org/abs/1509.02971
 
-
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
         super(Actor, self).__init__()
@@ -19,12 +18,10 @@ class Actor(nn.Module):
 
         self.max_action = max_action
 
-
     def forward(self, state):
         a = F.relu(self.l1(state))
         a = F.relu(self.l2(a))
         return self.max_action * torch.tanh(self.l3(a))
-
 
 class Critic(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -38,7 +35,6 @@ class Critic(nn.Module):
         q = F.relu(self.l1(torch.cat([state, action], 1)))
         q = F.relu(self.l2(q))
         return self.l3(q)
-
 
 class DDPG(object):
     def __init__(self, state_dim, action_dim, max_action, device, discount=0.99, tau=0.005):
@@ -59,7 +55,7 @@ class DDPG(object):
         return self.actor(state).cpu().data.numpy().flatten()
 
     def train(self, replay_buffer, batch_size=100):
-        # Sample replay buffer 
+        # Sample replay buffer
         state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
 
         # Compute the target Q value
@@ -80,7 +76,7 @@ class DDPG(object):
         # Compute actor loss
         actor_loss = -self.critic(state, self.actor(state)).mean()
 
-        # Optimize the actor 
+        # Optimize the actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -98,7 +94,6 @@ class DDPG(object):
 
         torch.save(self.actor.state_dict(), filename + "_actor")
         torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
-
 
     def load(self, filename):
         self.critic.load_state_dict(torch.load(filename + "_critic"))
