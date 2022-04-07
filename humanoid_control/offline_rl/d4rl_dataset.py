@@ -99,6 +99,14 @@ class D4RLDataset(ExpertDataset):
         for file_path in h5py_fpaths:
             with h5py.File(file_path, 'r') as dataset_file:
                 new_data = self._load_dataset_in_memory(dataset_file, clip_ids)
+                if not data_dict:
+                    data_dict['observations'] = new_data['observations']
+                    data_dict['actions'] = new_data['actions']
+                    data_dict['rewards'] = new_data['rewards']
+                    data_dict['terminals'] = new_data['terminals']
+                    data_dict['timeouts'] = new_data['timeouts']
+                    continue
+
                 data_dict['observations'] = np.concatenate(data_dict['observations'], new_data['observations'])
                 data_dict['actions'] = np.concatenate(data_dict['actions'], new_data['actions'])
                 data_dict['rewards'] = np.concatenate(data_dict['rewards'], new_data['rewards'])
@@ -127,8 +135,8 @@ class D4RLDataset(ExpertDataset):
                     episode_terminals[-1] = 1
                 else:
                     episode_timeouts[-1] = 1
-                terminals.append(np.array(terminals))
-                timeouts.append(np.array(timeouts))
+                terminals.append(np.array(episode_terminals))
+                timeouts.append(np.array(episode_timeouts))
 
         data_dict = {
             'observations': np.concatenate(obs),
@@ -267,7 +275,9 @@ if __name__ == "__main__":
     dset = D4RLDataset(
         observables=observables.TIME_INDEX_OBSERVABLES,
         dataset_url='https://dilbertws7896891569.blob.core.windows.net/public?sv=2020-10-02&st=2022-03-31T02%3A16%3A46Z&se=2023-02-01T03%3A16%3A00Z&sr=c&sp=rl&sig=33NYiCqgT0m%2FWRU6kA638UrfxnVb%2FfBYaSkemYZPB14%3D',
-        h5py_fnames=['example.hdf5'],
+        dataset_local_path=os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data'),
+        h5py_fnames=['CMU_001_01-0-178.hdf5'],
     )
     sample = dset[0]
-    d4rl_data_dict = dset.get_in_memory_rollouts([os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5')])
+    d4rl_data_dict = dset.get_in_memory_rollouts([os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'CMU_001_01-0-178.hdf5')])
+    print(d4rl_data_dict.shape)

@@ -25,5 +25,26 @@
             "console": "integratedTerminal",
             "python.envFile": "${workspaceFolder}/.env"
         },
+        {
+            "name": "expert-rollout",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control\\distillation\\rollout_experts.py",
+            "args": 
+            [
+                "--input_dirs", "data/CMU_001_01-0-178",
+                "--output_path", "data/CMU_001_01-0-178.hdf5",
+                "--n_start_rollouts", "1",
+                "--n_random_rollouts", "1",
+                "--n_workers",  "1",
+                "--min_steps", "25"
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "python.envFile": "${workspaceFolder}/.env"
+        },
+
+              
     ]
 }
