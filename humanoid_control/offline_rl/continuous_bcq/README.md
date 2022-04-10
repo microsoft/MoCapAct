@@ -1,6 +1,6 @@
 # Off-Policy Deep Reinforcement Learning without Exploration
 Code for Batch-Constrained deep Q-Learning (BCQ).
-This code was extracted from the [d4rl_evaluations](https://github.com/rail-berkeley/d4rl_evaluations) repo and originally from the [paper](https://arxiv.org/abs/1812.02900). If you use it, please cite it.
+This code was inspired by the [d4rl_evaluations](https://github.com/rail-berkeley/d4rl_evaluations) repo and originally from the [paper](https://arxiv.org/abs/1812.02900):
 
 ### Bibtex
 

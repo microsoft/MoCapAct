@@ -72,7 +72,7 @@ class VAE(nn.Module):
         z = F.relu(self.e2(z))
 
         mean = self.mean(z)
-        # Clamped for numerical stability 
+        # Clamped for numerical stability
         log_std = self.log_std(z).clamp(-4, 15)
         std = torch.exp(log_std)
         z = mean + std * torch.randn_like(std)
@@ -124,8 +124,8 @@ class BCQ(object):
     def train(self, replay_buffer, iterations, batch_size=100):
         for it in range(iterations):
             # Sample replay buffer / batch
-            state, action, reward, next_state, terminal, timeout, weigh = replay_buffer.sample(batch_size)
-            not_done = not (terminal or timeout)
+            state, action, reward, next_state, terminal, timeout, _ = next(iter(replay_buffer))
+            not_done = torch.logical_not(torch.logical_or(terminal, timeout))
 
             # Variational Auto-Encoder Training
             recon, mean, std = self.vae(state, action)

@@ -44,7 +44,22 @@
             "console": "integratedTerminal",
             "python.envFile": "${workspaceFolder}/.env"
         },
-
+        {
+            "name": "train-bcq",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control\\offline_rl\\train_bcq.py",
+            "args": 
+            [
+                "--output_root", "data/offline_rl",
+                "--dataset_local_path", "data",
+                "--train_dataset_files", "CMU_001_01-0-178.hdf5",
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+            "python.envFile": "${workspaceFolder}/.env"
+        },
               
     ]
 }

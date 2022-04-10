@@ -15,7 +15,7 @@ from stable_baselines3.common.running_mean_std import RunningMeanStd
 
 from humanoid_control import observables
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
-from humanoid_control.offline_rl.continuous_bcq import utils as bcq_utils, BCQ
+from humanoid_control.offline_rl.continuous_bcq.bcq import BCQ
 
 FLAGS = flags.FLAGS
 
@@ -23,24 +23,27 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
 flags.DEFINE_string("dataset_local_path", None, "Path to the dataset")
 flags.DEFINE_list("dataset_url", None, "URL to download the dataset")
-flags.DEFINE_list("train_dataset_file_names", None, "HDF5 names for the training")
-flags.DEFINE_list("val_dataset_file_names", None, "HDF5 names for the validation, if desired")
+flags.DEFINE_list("train_dataset_files", None, "HDF5 names for the training")
+flags.DEFINE_list("val_dataset_files", None, "HDF5 names for the validation, if desired")
 flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning's loop over the validation set")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, every clip.")
-flags.DEFINE_float("eval_freq", 5e3, "How often to evaluate the policy")
-flags.DEFINE_string("buffer_name", "Robust", "Prefix for file names")
-flags.DEFINE_string("env_name", "Humanoid-Control", "Environment from which the dataset was generated")
-flags.DEFINE_integer("seed", 0, "Sets Gym, PyTorch and Numpy seeds")
-flags.DEFINE_integer("max_timesteps", 1e6, "Max time steps to train for (this defines buffer size)")
 
 # Training hyperparameters
+flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to RAM")
+flags.DEFINE_string("env_name", "Humanoid-Control", "Environment from which the dataset was generated")
+flags.DEFINE_integer("seed", 0, "Sets Gym, PyTorch and Numpy seeds")
+flags.DEFINE_string("buffer_name", "Robust", "Prefix for file names")
+flags.DEFINE_float("eval_freq", 5e3, "How often to evaluate the policy, in terms of timesteps")
+flags.DEFINE_float("max_timesteps", 1e6, "Max time steps to train for (this defines buffer size)")
+
 flags.DEFINE_integer("batch_size", 64, "Batch size used during training")
 flags.DEFINE_float("discount", 0.99, "Discount factor")
 flags.DEFINE_float("tau", 0.005, "Target network update rate")
 flags.DEFINE_float("lmbda", 0.75, "Weighting for clipped double Q-learning in BCQ")
 flags.DEFINE_float("phi", 0.05, "Max perturbation hyper-parameter for BCQ")
+flags.DEFINE_float("temperature", None, "AWR temperature")
 
 # Model hyperparameters
 config_file = "humanoid_control/offline_rl/config.py"
@@ -63,13 +66,15 @@ flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_st
 config_flags.DEFINE_config_dict("eval", eval_config)
 
 flags.mark_flag_as_required("output_root")
-flags.mark_flag_as_required("train_dataset_paths")
+flags.mark_flag_as_required("dataset_local_path")
+flags.mark_flag_as_required("train_dataset_files")
 
 def eval_policy(policy, env_name, seed, eval_episodes=10):
     pass
 
 def main(_):
     output_dir = os.path.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    os.makedirs(output_dir, exist_ok=True)
 
     # Log some stuff (but only in process 0)
     if os.getenv("LOCAL_RANK", "0") == "0":
@@ -90,7 +95,7 @@ def main(_):
         if FLAGS.val_dataset_file_names is not None:
             random.shuffle(FLAGS.val_dataset_file_names)
 
-    # Make supervision dataset
+    # Make OfflineRL dataset
     if hasattr(FLAGS.model.config, 'seq_steps'):
         seq_steps = FLAGS.model.config.seq_steps
     elif hasattr(FLAGS.model.config, 'block_size'):
@@ -101,26 +106,26 @@ def main(_):
     train_dataset = D4RLDataset(
         observables=observables.TIME_INDEX_OBSERVABLES,
         dataset_local_path=FLAGS.dataset_local_path,
-        h5py_fnames=FLAGS.train_dataset_file_names,
+        h5py_fnames=FLAGS.train_dataset_files,
         clip_ids=FLAGS.clip_ids,
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
         normalize_obs=False,  # FLAGS.normalize_obs,
         preload=FLAGS.preload_dataset,
         temperature=FLAGS.temperature,
-        concat_observables=False
     )
 
-    if FLAGS.val_dataset_file_names is not None:
+    if FLAGS.val_dataset_files is not None:
         val_dataset = D4RLDataset(
-            observables=FLAGS.model.config.observables,
+            observables=observables.TIME_INDEX_OBSERVABLES,
             dataset_local_path=FLAGS.dataset_local_path,
-            h5py_fnames=FLAGS.val_dataset_file_names,
+            h5py_fnames=FLAGS.val_dataset_files,
             clip_ids=FLAGS.clip_ids,
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=FLAGS.normalize_obs,
-            preload=FLAGS.preload_dataset
+            preload=FLAGS.preload_dataset,
+            temperature=FLAGS.temperature,
         )
 
     if FLAGS.normalize_obs:
@@ -134,9 +139,8 @@ def main(_):
     else:
         obs_rms = None
 
-    obs, act, rew, next_obs, terminal, timeout, weight = train_dataset[0]
-    obs_dim = obs.shape[0]
-    action_dim = act.shape[0]
+    obs_dim = train_dataset.observation_space.shape[0]
+    action_dim = train_dataset.action_space.shape[0]
     max_action = float(train_dataset.action_space.high[0])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -148,7 +152,7 @@ def main(_):
 
     evaluations = []
     training_iters = 0
-    replay_buffer = DataLoader(train_dataset, FLAGS.batch_size, num_workers=4, shuffle=True)
+    replay_buffer = DataLoader(train_dataset, FLAGS.batch_size, shuffle=True)
     while training_iters < FLAGS.max_timesteps:
         print('Train step:', training_iters)
 
