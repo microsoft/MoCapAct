@@ -8,7 +8,7 @@ from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.viewer import application
 
 from humanoid_control import utils
-from humanoid_control.sb3 import env_util
+from humanoid_control.envs import env_util
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import tracking
 from humanoid_control.sb3 import wrappers

@@ -55,6 +55,7 @@
                 "--output_root", "data/offline_rl",
                 "--dataset_local_path", "data",
                 "--train_dataset_files", "CMU_001_01-0-178.hdf5",
+                "--eval_freq", "1"
             ],
             "justMyCode": false,
             "console": "integratedTerminal",

@@ -3,8 +3,66 @@ import numpy as np
 from typing import Any, Callable, Dict, Optional, Type, Union
 import gym
 
+from dm_control.locomotion.tasks.reference_pose import types
+
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv, VecNormalize, VecVideoRecorder
+
+from humanoid_control import observables
+from humanoid_control.sb3 import wrappers
+from humanoid_control.envs import tracking
+
+def make_env(
+    seed=0,
+    clip_ids=[],
+    start_steps=[0],
+    end_steps=[0],
+    min_steps=10,
+    training=True,
+    act_noise=0.,
+    always_init_at_clip_start=False,
+    record_video=False,
+    video_folder=None,
+    n_workers=4,
+    termination_error_threshold=float('inf'),
+    gamma=0.95,
+    normalize_obs=True,
+    normalize_rew=True
+):
+    dataset = types.ClipCollection(
+        ids=clip_ids,
+        start_steps=start_steps,
+        end_steps=end_steps
+    )
+    task_kwargs = dict(
+        reward_type='comic',
+        min_steps=min_steps - 1,
+        always_init_at_clip_start=always_init_at_clip_start,
+        termination_error_threshold=termination_error_threshold
+    )
+    env_kwargs = dict(
+        dataset=dataset,
+        ref_steps=(0,),
+        act_noise=act_noise,
+        task_kwargs=task_kwargs
+    )
+    env = make_vec_env(
+        env_id=tracking.MocapTrackingGymEnv,
+        n_envs=n_workers,
+        seed=seed,
+        env_kwargs=env_kwargs,
+        vec_env_cls=SubprocVecEnv,
+        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
+    )
+    if record_video and video_folder:
+        env = VecVideoRecorder(env, video_folder,
+                               record_video_trigger=lambda x: x >= 0,
+                               video_length=float('inf'))
+    env = VecNormalize(env, training=training, gamma=gamma,
+                       norm_obs=normalize_obs,
+                       norm_reward=normalize_rew,
+                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
+    return env
 
 def make_vec_env(
     env_id: Type[gym.Env],
@@ -16,7 +74,7 @@ def make_vec_env(
     env_kwargs: Optional[Dict[str, Any]] = None,
     vec_env_cls: Optional[Type[Union[DummyVecEnv, SubprocVecEnv]]] = None,
     vec_env_kwargs: Optional[Dict[str, Any]] = None,
-    vec_monitor_cls = VecMonitor,
+    vec_monitor_cls=VecMonitor,
     monitor_kwargs: Optional[Dict[str, Any]] = None,
     wrapper_kwargs: Optional[Dict[str, Any]] = None,
 ) -> VecEnv:

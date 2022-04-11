@@ -14,8 +14,11 @@ import pytorch_lightning as pl
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 
 from humanoid_control import observables
+from humanoid_control import utils
+from humanoid_control.envs import env_util
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
 from humanoid_control.offline_rl.continuous_bcq.bcq import BCQ
+
 
 FLAGS = flags.FLAGS
 
@@ -31,8 +34,12 @@ flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model
 flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, every clip.")
 
 # Training hyperparameters
+flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
+flags.DEFINE_list("start_steps", [0], "Start step in clips")
+flags.DEFINE_integer("max_clip_steps", 256, "Maximum steps from start step")
+flags.DEFINE_integer("min_clip_steps", 1, "Minimum steps in a rollout")
 flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to RAM")
-flags.DEFINE_string("env_name", "Humanoid-Control", "Environment from which the dataset was generated")
+flags.DEFINE_string("env_name", "MocapTrackingGymEnv", "Environment from which the dataset was generated")
 flags.DEFINE_integer("seed", 0, "Sets Gym, PyTorch and Numpy seeds")
 flags.DEFINE_string("buffer_name", "Robust", "Prefix for file names")
 flags.DEFINE_float("eval_freq", 5e3, "How often to evaluate the policy, in terms of timesteps")
@@ -69,8 +76,27 @@ flags.mark_flag_as_required("output_root")
 flags.mark_flag_as_required("dataset_local_path")
 flags.mark_flag_as_required("train_dataset_files")
 
-def eval_policy(policy, env_name, seed, eval_episodes=10):
-    pass
+
+def eval_policy(
+    policy,
+    eval_env,
+    eval_episodes=10
+):
+    avg_reward = 0.
+    for _ in range(eval_episodes):
+        obs, done = eval_env.reset(), False
+        while not done:
+            action = policy.select_action(np.array(obs))
+            obs, reward, done, info = eval_env.step(action)
+            avg_reward += reward
+
+    avg_reward /= eval_episodes
+
+    print("---------------------------------------")
+    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+    print("---------------------------------------")
+    return avg_reward
+
 
 def main(_):
     output_dir = os.path.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
@@ -89,11 +115,11 @@ def main(_):
 
     # If desired, randomize order of dataset paths
     if FLAGS.randomly_load_hdf5:
-        print(FLAGS.train_dataset_file_names)
-        random.shuffle(FLAGS.train_dataset_file_names)
-        print(FLAGS.train_dataset_file_names)
-        if FLAGS.val_dataset_file_names is not None:
-            random.shuffle(FLAGS.val_dataset_file_names)
+        print(FLAGS.train_dataset_files)
+        random.shuffle(FLAGS.train_dataset_files)
+        print(FLAGS.train_dataset_files)
+        if FLAGS.val_dataset_files is not None:
+            random.shuffle(FLAGS.val_dataset_files)
 
     # Make OfflineRL dataset
     if hasattr(FLAGS.model.config, 'seq_steps'):
@@ -146,6 +172,18 @@ def main(_):
 
     # For saving files
     setting = f"{FLAGS.env_name}_{FLAGS.seed}"
+    clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.all_clip_ids])
+    eval_env = env_util.make_env(
+        seed=FLAGS.seed,
+        clip_ids=clip_ids,
+        start_steps=start_steps,
+        end_steps=end_steps,
+        training=True,
+        act_noise=0.,
+        always_init_at_clip_start=False,
+        record_video=FLAGS.record_video,
+        termination_error_threshold=FLAGS.termination_error_threshold
+    )
 
     # Initialize policy
     policy = BCQ(obs_dim, action_dim, max_action, device, FLAGS.discount, FLAGS.tau, FLAGS.lmbda, FLAGS.phi)
@@ -158,7 +196,12 @@ def main(_):
 
         pol_vals = policy.train(replay_buffer, iterations=int(FLAGS.eval_freq), batch_size=FLAGS.batch_size)
 
-        evaluations.append(eval_policy(policy, FLAGS.env_name, FLAGS.seed))
+        eval_avg_reward = eval_policy(
+            policy,
+            eval_env,
+
+        )
+        evaluations.append(eval_avg_reward)
         np.save(os.path.join(output_dir, f"BCQ_{setting}"), evaluations)
 
         training_iters += FLAGS.eval_freq

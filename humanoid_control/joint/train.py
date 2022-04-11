@@ -2,7 +2,6 @@ import os
 import os.path as osp
 from pathlib import Path
 import glob
-from datetime import datetime
 import pickle
 from textwrap import wrap
 from tkinter import W
@@ -29,7 +28,7 @@ from humanoid_control import utils
 from humanoid_control.clip_expert import callbacks
 from humanoid_control.distillation import dataset
 #from stable_baselines3.common import env_util
-from humanoid_control.sb3 import env_util
+from humanoid_control.envs import env_util
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.tasks import stand
 from humanoid_control.sb3 import utils as sb3_utils
@@ -101,10 +100,15 @@ def make_env(seed=0, training=True):
         vec_env_cls=SubprocVecEnv,
         wrapper_kwargs=dict(embed_dim=embed_dim, embed_max=3.)
     )
-    env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
-                        norm_obs=FLAGS.normalize_observation,
-                        norm_reward=FLAGS.normalize_reward,
-                        norm_obs_keys=observables.CMU_HUMANOID_OBSERVABLES + ('embedding',))
+    env = VecNormalize(
+        env,
+        training=training,
+        gamma=FLAGS.gamma,
+        norm_obs=FLAGS.normalize_observation,
+        norm_reward=FLAGS.normalize_reward,
+        norm_obs_keys=observables.CMU_HUMANOID_OBSERVABLES + ('embedding',)
+    )
+
     return env
 
 def main(_):
