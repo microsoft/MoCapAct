@@ -57,6 +57,8 @@ class PolicyEvaluationCallback(Callback):
         self._steps = []
         self._rewards = []
         self._lengths = []
+        self._norm_rewards = []
+        self._norm_lengths = []
 
     def _create_env(self) -> None:
         task_kwargs = dict(
@@ -90,7 +92,7 @@ class PolicyEvaluationCallback(Callback):
         if model.global_rank == 0 and self._eval_freq > 0 and self.n_calls % self._eval_freq == 0:
             self._create_env()
             self._env.seed(self._seed)
-            _, _, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
+            ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
                 model,
                 self._env,
                 n_eval_episodes=self._n_eval_episodes,
@@ -98,8 +100,10 @@ class PolicyEvaluationCallback(Callback):
                 return_episode_rewards=True
             )
             self._steps.append(trainer.global_step)
-            self._rewards.append(ep_norm_rews)
-            self._lengths.append(ep_norm_lens)
+            self._rewards.append(ep_rews)
+            self._lengths.append(ep_lens)
+            self._norm_rewards.append(ep_norm_rews)
+            self._norm_lengths.append(ep_norm_lens)
             metrics = {
                 f"eval/{self._prefix}norm_rew" : np.mean(ep_norm_rews),
                 f"eval/{self._prefix}norm_len" : np.mean(ep_norm_lens)
@@ -112,7 +116,9 @@ class PolicyEvaluationCallback(Callback):
                 osp.join(self._log_dir, 'evaluations.npz'),
                 steps=self._steps,
                 rewards=self._rewards,
-                lengths=self._lengths
+                lengths=self._lengths,
+                norm_rewards=self._norm_rewards,
+                norm_lengths=self._norm_lengths
             )
             trainer.logger.log_metrics(metrics, trainer.global_step)
             if metrics[f"eval/{self._prefix}norm_rew"] > self._best_reward:
