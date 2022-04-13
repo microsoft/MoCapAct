@@ -171,7 +171,7 @@ class MocapTrackingEvalCallback(EvalCallback):
                 return_episode_rewards=True,
                 warn=self.warn,
             )
-            episode_rewards, episode_lengths, episode_rewards_norm, episode_lengths_norm = results
+            episode_rewards, episode_lengths, episode_rewards_norm, episode_lengths_norm, _ = results
             self.eval_env.close()
             self.eval_env = self.eval_env_ctor()
 
