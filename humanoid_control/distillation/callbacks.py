@@ -90,7 +90,7 @@ class PolicyEvaluationCallback(Callback):
         if model.global_rank == 0 and self._eval_freq > 0 and self.n_calls % self._eval_freq == 0:
             self._create_env()
             self._env.seed(self._seed)
-            _, _, ep_norm_rews, ep_norm_lens = evaluation.evaluate_locomotion_policy(
+            _, _, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
                 model,
                 self._env,
                 n_eval_episodes=self._n_eval_episodes,
