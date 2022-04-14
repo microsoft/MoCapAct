@@ -387,6 +387,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         layer_norm: bool = False,
         embedding_kl_weight: float = 0.1,
         embedding_correlation: float = 0.95,
+        predict_delta_embed: bool = False,
         seq_steps: int = 30,
         truncated_bptt_steps: Optional[int] = None,
         activation_fn: Text = 'torch.nn.Tanh',
@@ -412,6 +413,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         self.embedding_kl_weight = embedding_kl_weight
         self.embedding_correlation = embedding_correlation
         self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
+        self.predict_delta_embed = predict_delta_embed
         self.seq_steps = seq_steps
         self.truncated_bptt_steps = min(truncated_bptt_steps, seq_steps) if truncated_bptt_steps else seq_steps
 
@@ -451,6 +453,7 @@ class HierarchicalRnnPolicy(BasePolicy):
                 layer_norm=self.layer_norm,
                 embedding_kl_weight=self.embedding_kl_weight,
                 embedding_correlation=self.embedding_correlation,
+                predict_delta_embed=self.predict_delta_embed,
                 seq_steps=self.seq_steps
             )
         )
@@ -468,12 +471,17 @@ class HierarchicalRnnPolicy(BasePolicy):
         prev_embed: torch.Tensor,
         deterministic: bool = False
     ):
-        embed_mean, embed_log_std = torch.split(
+        delta_embed_mean, embed_log_std = torch.split(
             self.reference_encoder(torch.cat([ref_encoder_input, prev_embed], dim=-1)),
             self.embed_size,
             dim=-1
         )
+        if self.predict_delta_embed:
+            embed_mean = delta_embed_mean + self.embedding_correlation*prev_embed
+        else:
+            embed_mean = delta_embed_mean
         embed_gaussian = Independent(Normal(embed_mean, embed_log_std.exp()), -1)
+        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), -1)
         embed = embed_mean if deterministic else embed_gaussian.rsample()
 
         act = self.action_decoder(torch.cat([decoder_input, embed], dim=-1))
