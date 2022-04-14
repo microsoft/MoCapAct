@@ -22,8 +22,9 @@ from humanoid_control import observables
 from humanoid_control import utils
 from humanoid_control.envs import env_util
 from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import tracking
+from humanoid_control.envs import tracking
 from humanoid_control.sb3 import utils as sb3_utils
+from humanoid_control.envs import wrappers
 from humanoid_control.clip_expert import callbacks
 
 FLAGS = flags.FLAGS
@@ -126,16 +127,54 @@ def is_still_running(root):
     # Otherwise, we assume no other running jobs
     return False
 
+def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
+             act_noise=0., always_init_at_clip_start=False, video_folder=None,
+             termination_error_threshold=float('inf')):
+    dataset = types.ClipCollection(
+        ids=[FLAGS.clip_id],
+        start_steps=[start_step],
+        end_steps=[end_step]
+    )
+    task_kwargs = dict(
+        reward_type='comic',
+        min_steps=min_steps-1,
+        always_init_at_clip_start=always_init_at_clip_start,
+        termination_error_threshold=termination_error_threshold
+    )
+    env_kwargs = dict(
+        dataset=dataset,
+        ref_steps=(0,),
+        act_noise=act_noise,
+        task_kwargs=task_kwargs
+    )
+    env = env_util.make_vec_env(
+        env_id=tracking.MocapTrackingGymEnv,
+        n_envs=FLAGS.n_workers,
+        seed=seed,
+        env_kwargs=env_kwargs,
+        vec_env_cls=SubprocVecEnv,
+        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
+    )
+    if FLAGS.record_video and video_folder:
+        env = VecVideoRecorder(env, video_folder,
+                               record_video_trigger=lambda x: x>=0,
+                               video_length=float('inf'))
+    env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
+                       norm_obs=FLAGS.normalize_observation,
+                       norm_reward=FLAGS.normalize_reward,
+                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
+    return env
 
-#def get_warm_start_path(evaluation_paths):
-#    save_times = [osp.getmtime(path) for path in evaluation_paths]
-#    sorted_indices = np.argsort(save_times)[::-1]
-#    for i in sorted_indices:
-#        path = evaluation_paths[sorted_indices[i]]
-#        model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
-#        if osp.exists(osp.join(model_path, 'best_model.zip')):
-#            return model_path
-#    return None
+# def get_warm_start_path(evaluation_paths):
+#     save_times = [osp.getmtime(path) for path in evaluation_paths]
+#     sorted_indices = np.argsort(save_times)[::-1]
+#     for i in sorted_indices:
+#         path = evaluation_paths[sorted_indices[i]]
+#         model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
+#         if osp.exists(osp.join(model_path, 'best_model.zip')):
+#             return model_path
+#     return None
+
 def get_warm_start_path(evaluation_paths):
     best_rew, best_path = float('-inf'), None
     for path in evaluation_paths:
@@ -216,23 +255,12 @@ def main(_):
     )
 
     # Evaluation environment where start point is selected at random
-    random_eval_env_ctor = lambda: env_util.make_env(
-        seed=FLAGS.eval.seed,
-        clip_ids=[FLAGS.clip_id],
-        start_steps=[FLAGS.start_step],
-        end_steps=[end_step],
-        min_steps=FLAGS.eval.min_steps,
-        training=False,
-        act_noise=FLAGS.eval.random_eval_act_noise,
-        always_init_at_clip_start=False,
-        record_video=FLAGS.record_video,
-        video_folder=random_eval_path,
-        n_workers=FLAGS.n_workers,
-        termination_error_threshold=FLAGS.termination_error_threshold,
-        gamma=FLAGS.gamma,
-        normalize_obs=FLAGS.normalize_observation,
-        normalize_rew=FLAGS.normalize_reward
-    )
+    random_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
+                                            end_step=end_step, min_steps=FLAGS.eval.min_steps,
+                                            act_noise=FLAGS.eval.random_eval_act_noise,
+                                            training=False, always_init_at_clip_start=False,
+                                            video_folder=random_eval_path,
+                                            termination_error_threshold=FLAGS.termination_error_threshold)
     eval_freq = int(FLAGS.eval.freq / FLAGS.n_workers)
     random_eval_model_path = osp.join(random_eval_path, 'model')
     callback_on_new_best = callbacks.SaveVecNormalizeCallback(
@@ -258,22 +286,12 @@ def main(_):
     )
 
     # Evaluation environment where start point is beginning of snippet
-    start_eval_env_ctor = lambda: env_util.make_env(
-        seed=FLAGS.eval.seed,
-        start_steps=[FLAGS.start_step],
-        end_steps=[end_step],
-        min_steps=FLAGS.eval.min_steps,
-        training=False,
-        act_noise=FLAGS.eval.start_eval_act_noise,
-        always_init_at_clip_start=True,
-        record_video=FLAGS.record_video,
-        video_folder=start_eval_path,
-        n_workers=FLAGS.n_workers,
-        termination_error_threshold=FLAGS.termination_error_threshold
-        gamma=FLAGS.gamma,
-        normalize_obs=FLAGS.normalize_observation,
-        normalize_rew=FLAGS.normalize_reward
-    )
+    start_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
+                                           act_noise=FLAGS.eval.start_eval_act_noise, end_step=end_step,
+                                           min_steps=FLAGS.eval.min_steps, training=False,
+                                           always_init_at_clip_start=True,
+                                           video_folder=start_eval_path,
+                                           termination_error_threshold=FLAGS.termination_error_threshold)
     start_eval_model_path = osp.join(start_eval_path, 'model')
     callback_on_new_best = callbacks.SaveVecNormalizeCallback(
         save_freq=1,

@@ -12,10 +12,13 @@ from torch.utils.data.dataloader import DataLoader
 import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder
 
+from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
-from humanoid_control import utils
 from humanoid_control.envs import env_util
+from humanoid_control.envs import tracking
+from humanoid_control.envs import wrappers
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
 from humanoid_control.offline_rl.continuous_bcq.bcq import BCQ
 
@@ -75,6 +78,59 @@ config_flags.DEFINE_config_dict("eval", eval_config)
 flags.mark_flag_as_required("output_root")
 flags.mark_flag_as_required("dataset_local_path")
 flags.mark_flag_as_required("train_dataset_files")
+
+
+def make_env(
+    seed=0,
+    clip_ids=[],
+    start_steps=[0],
+    end_steps=[0],
+    min_steps=10,
+    training=True,
+    act_noise=0.,
+    always_init_at_clip_start=False,
+    record_video=False,
+    video_folder=None,
+    n_workers=4,
+    termination_error_threshold=float('inf'),
+    gamma=0.95,
+    normalize_obs=True,
+    normalize_rew=True
+):
+    dataset = types.ClipCollection(
+        ids=clip_ids,
+        start_steps=start_steps,
+        end_steps=end_steps
+    )
+    task_kwargs = dict(
+        reward_type='comic',
+        min_steps=min_steps - 1,
+        always_init_at_clip_start=always_init_at_clip_start,
+        termination_error_threshold=termination_error_threshold
+    )
+    env_kwargs = dict(
+        dataset=dataset,
+        ref_steps=(0,),
+        act_noise=act_noise,
+        task_kwargs=task_kwargs
+    )
+    env = env_util.make_vec_env(
+        env_id=tracking.MocapTrackingGymEnv,
+        n_envs=n_workers,
+        seed=seed,
+        env_kwargs=env_kwargs,
+        vec_env_cls=SubprocVecEnv,
+        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
+    )
+    if record_video and video_folder:
+        env = VecVideoRecorder(env, video_folder,
+                               record_video_trigger=lambda x: x >= 0,
+                               video_length=float('inf'))
+    env = VecNormalize(env, training=training, gamma=gamma,
+                       norm_obs=normalize_obs,
+                       norm_reward=normalize_rew,
+                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
+    return env
 
 
 def eval_policy(
@@ -199,7 +255,6 @@ def main(_):
         eval_avg_reward = eval_policy(
             policy,
             eval_env,
-
         )
         evaluations.append(eval_avg_reward)
         np.save(os.path.join(output_dir, f"BCQ_{setting}"), evaluations)

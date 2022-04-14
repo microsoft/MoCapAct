@@ -11,7 +11,7 @@ from humanoid_control import utils
 from humanoid_control.envs import env_util
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import tracking
-from humanoid_control.sb3 import wrappers
+from humanoid_control.envs import wrappers
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_root", None, "Directory where saved policy is stored")

@@ -32,7 +32,7 @@ from humanoid_control.envs import env_util
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.tasks import stand
 from humanoid_control.sb3 import utils as sb3_utils
-from humanoid_control.sb3 import wrappers
+from humanoid_control.envs import wrappers
 from humanoid_control.joint.ppo import PPOBC
 from humanoid_control.joint.a2c import A2CBC
 
