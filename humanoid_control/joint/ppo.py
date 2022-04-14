@@ -32,6 +32,7 @@ class PPOBC(PPO):
         gae_lambda: float = 0.95,
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
+        normalize_advantage: bool = True,
         kl_coef: float = 0.,
         vf_coef: float = 0.5,
         bc_coef: float = 0.0,
@@ -57,6 +58,7 @@ class PPOBC(PPO):
             gae_lambda=gae_lambda,
             clip_range=clip_range,
             clip_range_vf=clip_range_vf,
+            normalize_advantage=normalize_advantage,
             ent_coef=0.,
             vf_coef=vf_coef,
             max_grad_norm=max_grad_norm,
@@ -117,7 +119,8 @@ class PPOBC(PPO):
                 values = values.flatten()
                 # Normalize advantage
                 advantages = rollout_data.advantages
-                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+                if self.normalize_advantage:
+                    advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
                 embedding_kls.append(kl_div.item())
 
