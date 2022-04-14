@@ -86,6 +86,7 @@ def evaluate_locomotion_policy(
     current_lengths = np.zeros(n_envs, dtype="int")
     observations = env.reset()
     states = None
+    frames = []
     episode_starts = np.ones((env.num_envs,), dtype=bool)
     while (episode_counts < episode_count_targets).any():
         actions, states = model.predict(observations, state=states,
@@ -129,12 +130,14 @@ def evaluate_locomotion_policy(
                     current_lengths[i] = 0
 
         if render:
-            env.render()
+            # Custom rendering using the physics object of the first vec env.
+            frame = env.get_attr('physics')[0].render(width=640, height=480, camera_id=3).copy()
+            frames.append(frame)
 
     mean_reward = np.mean(episode_rewards)
     std_reward = np.std(episode_rewards)
     if reward_threshold is not None:
         assert mean_reward > reward_threshold, "Mean reward below threshold: " f"{mean_reward:.2f} < {reward_threshold:.2f}"
     if return_episode_rewards:
-        return episode_rewards, episode_lengths, episode_norm_rewards, episode_norm_lengths
+        return episode_rewards, episode_lengths, episode_norm_rewards, episode_norm_lengths, frames
     return mean_reward, std_reward

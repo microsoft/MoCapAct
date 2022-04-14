@@ -31,6 +31,7 @@ flags.DEFINE_string("save_path", None, "If desired, the path to save the evaluat
 # Visualization hyperparameters
 flags.DEFINE_float("ghost_offset", 0., "Offset for reference ghost")
 flags.DEFINE_bool("visualize", True, "Whether to visualize via GUI")
+flags.DEFINE_string("record_path", None, "Path to save a video recording of the evaluation")
 
 flags.mark_flag_as_required("policy_root")
 flags.mark_flag_as_required("clip_snippets")
@@ -59,7 +60,7 @@ def main(_):
 
     # set up model
     with open(osp.join(osp.dirname(osp.dirname(osp.dirname(FLAGS.policy_root))), 'model_constructor.txt'), 'r') as f:
-    #with open(osp.join(osp.dirname(FLAGS.policy_root), 'model_constructor.txt'), 'r') as f:
+    # with open(osp.join(osp.dirname(FLAGS.policy_root), 'model_constructor.txt'), 'r') as f:
         model_cls = utils.str_to_callable(f.readline())
     policy = model_cls.load_from_checkpoint(FLAGS.policy_root, map_location='cpu')
     #policy.to('cuda:1')
@@ -94,11 +95,12 @@ def main(_):
     env = tracking.MocapTrackingGymEnv(**env_kwargs)
 
     if FLAGS.n_eval_episodes > 0:
-        ep_rews, ep_lens, ep_norm_rews, ep_norm_lens = evaluation.evaluate_locomotion_policy(
+        ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, ep_frames = evaluation.evaluate_locomotion_policy(
             policy,
             vec_env,
             n_eval_episodes=FLAGS.n_eval_episodes,
             deterministic=FLAGS.deterministic,
+            render=FLAGS.record_path is not None,
             return_episode_rewards=True
         )
         print(f"Mean return: {np.mean(ep_rews):.1f} +/- {np.std(ep_rews):.1f}")
@@ -114,6 +116,10 @@ def main(_):
                 ep_norm_rews=ep_norm_rews,
                 ep_norm_lens=ep_norm_lens
             )
+
+        if ep_frames:
+            import imageio
+            imageio.mimwrite(FLAGS.record_path, ep_frames, fps=30)
 
     state = None
     @torch.no_grad()

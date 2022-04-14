@@ -61,6 +61,7 @@ flags.DEFINE_float("kl_coef", 1e-5, "")
 flags.DEFINE_float("bc_coef", 1., "")
 flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
 flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
+flags.DEFINE_float("embed_max", 10., "Maximum L1 magnitude for embedding")
 lr_config = ml_collections.ConfigDict()
 lr_config.start_val = 1e-4 # Initial step size
 lr_config.decay_half_life = 0.2 # Half-life for decay rate of learning rate
@@ -98,7 +99,7 @@ def make_env(seed=0, training=True):
         seed=seed,
         wrapper_class=wrappers.Embedding,
         vec_env_cls=SubprocVecEnv,
-        wrapper_kwargs=dict(embed_dim=embed_dim, embed_max=3.)
+        wrapper_kwargs=dict(embed_dim=embed_dim, embed_max=FLAGS.embed_max)
     )
     env = VecNormalize(
         env,

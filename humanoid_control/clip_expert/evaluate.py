@@ -113,7 +113,7 @@ def main(_):
     )
 
     if FLAGS.n_eval_episodes > 0:
-        ep_rews, ep_lens, ep_norm_rews, ep_norm_lens = evaluation.evaluate_locomotion_policy(
+        ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
             model,
             vec_env,
             n_eval_episodes=FLAGS.n_eval_episodes,
