@@ -30,7 +30,7 @@ flags.DEFINE_bool("deterministic", False, "Whether the policy is deterministic")
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
 flags.DEFINE_integer("min_steps", 10, "Minimum steps left at end of episode")
 flags.DEFINE_integer("seed", 0, "RNG seed")
-flags.DEFINE_integer("warmup_time", 16, "Number of time steps to build up context")
+flags.DEFINE_integer("warmup_steps", 16, "Number of time steps to build up context")
 flags.DEFINE_integer("max_steps", None, "Maximum number of steps in episode")
 flags.DEFINE_string("expert_root", None, "Path to expert used to generate context")
 flags.DEFINE_string("device", "cpu", "Device to do rollouts on")
@@ -171,7 +171,7 @@ def main(_):
             start_step = env.task._dataset.start_steps[env.task._current_clip_index]
             expert = get_expert(expert_paths, clip_id, start_step)
         action, state = policy.predict(env._get_obs(time_step), state, deterministic=FLAGS.deterministic)
-        if t < FLAGS.warmup_time:
+        if t < FLAGS.warmup_steps:
             action, _ = expert.predict(env._get_obs(time_step), None, deterministic=FLAGS.deterministic)
         t += 1
         return action
