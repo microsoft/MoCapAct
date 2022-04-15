@@ -28,7 +28,7 @@ class MultiClipMocapTracking(tracking.MultiClipMocapTracking):
         termination_error_threshold: float = 0.3,
         prop_termination_error_threshold: float = 0.1,
         min_steps: int = 10,
-        max_steps_override: Optional[Union[int, float]] = None,
+        max_steps_override: Optional[int] = None,
         reward_type: Text = 'termination_reward',
         physics_timestep: float = tracking.DEFAULT_PHYSICS_TIMESTEP,
         always_init_at_clip_start: bool = False,
