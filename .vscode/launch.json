@@ -8,18 +8,18 @@
             "name": "aml-run",
             "type": "python",
             "request": "launch",
-            "cwd": "${workspaceFolder}\\azureml_connector",
+            "cwd": "${workspaceFolder}/azureml_connector",
             "program": "aml_launcher.py",
             "justMyCode": false,
             "console": "integratedTerminal"
         },
         {
-            "name": "local-run",
+            "name": "d4rldataset",
             "type": "python",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "humanoid_control\\offline_rl\\d4rl_dataset.py",
-            // "program": "humanoid_control\\distillation\\dataset.py",
+            "program": "humanoid_control/offline_rl/d4rl_dataset.py",
+            // "program": "humanoid_control/distillation/dataset.py",
             "args": [],
             "justMyCode": false,
             "console": "integratedTerminal",
@@ -30,7 +30,7 @@
             "type": "python",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "humanoid_control\\distillation\\rollout_experts.py",
+            "program": "humanoid_control/distillation/rollout_experts.py",
             "args": 
             [
                 "--input_dirs", "data/CMU_001_01-0-178",
@@ -49,7 +49,7 @@
             "type": "python",
             "request": "launch",
             "cwd": "${workspaceFolder}",
-            "program": "humanoid_control\\offline_rl\\train_bcq.py",
+            "program": "humanoid_control/offline_rl/train_bcq.py",
             "args": 
             [
                 "--output_root", "data/offline_rl",
@@ -61,6 +61,5 @@
             "console": "integratedTerminal",
             "python.envFile": "${workspaceFolder}/.env"
         },
-              
     ]
 }

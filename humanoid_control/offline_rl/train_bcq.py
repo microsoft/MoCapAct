@@ -12,7 +12,7 @@ from torch.utils.data.dataloader import DataLoader
 import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder, DummyVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
@@ -20,7 +20,7 @@ from humanoid_control.envs import env_util
 from humanoid_control.envs import tracking
 from humanoid_control.envs import wrappers
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
-from humanoid_control.offline_rl.continuous_bcq.bcq import BCQ
+from humanoid_control.offline_rl.continuous_bcq.BCQ import BCQ
 
 
 FLAGS = flags.FLAGS
@@ -70,7 +70,7 @@ eval_config.n_episodes = 2500
 eval_config.act_noise = 0.
 eval_config.min_steps = 15
 eval_config.termination_error_threshold = 0.3
-eval_config.n_workers = 8
+eval_config.n_workers = 1
 eval_config.seed = 0
 flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_start", "val_random"], "What dataset and initialization to do evaluation on")
 config_flags.DEFINE_config_dict("eval", eval_config)
@@ -91,7 +91,7 @@ def make_env(
     always_init_at_clip_start=False,
     record_video=False,
     video_folder=None,
-    n_workers=4,
+    n_workers=1,
     termination_error_threshold=float('inf'),
     gamma=0.95,
     normalize_obs=True,
@@ -119,17 +119,14 @@ def make_env(
         n_envs=n_workers,
         seed=seed,
         env_kwargs=env_kwargs,
-        vec_env_cls=SubprocVecEnv,
+        vec_env_cls=DummyVecEnv,  # SubprocVecEnv
         vec_monitor_cls=wrappers.MocapTrackingVecMonitor
     )
     if record_video and video_folder:
         env = VecVideoRecorder(env, video_folder,
                                record_video_trigger=lambda x: x >= 0,
                                video_length=float('inf'))
-    env = VecNormalize(env, training=training, gamma=gamma,
-                       norm_obs=normalize_obs,
-                       norm_reward=normalize_rew,
-                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
+
     return env
 
 
@@ -138,15 +135,16 @@ def eval_policy(
     eval_env,
     eval_episodes=10
 ):
-    avg_reward = 0.
+    ret = 0.
     for _ in range(eval_episodes):
-        obs, done = eval_env.reset(), False
+        obs_dict, done = eval_env.reset(), False
         while not done:
-            action = policy.select_action(np.array(obs))
-            obs, reward, done, info = eval_env.step(action)
-            avg_reward += reward
+            obs = np.concatenate(list({k: obs_dict[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
+            action = policy.select_action(obs)
+            obs_dict, reward, done, info = eval_env.step([action])
+            ret += np.average(reward)
 
-    avg_reward /= eval_episodes
+    avg_reward = ret / eval_episodes
 
     print("---------------------------------------")
     print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
@@ -229,7 +227,9 @@ def main(_):
     # For saving files
     setting = f"{FLAGS.env_name}_{FLAGS.seed}"
     clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.all_clip_ids])
-    eval_env = env_util.make_env(
+    start_steps = [int(s) for s in start_steps]
+    end_steps = [int(s) for s in end_steps]
+    eval_env = make_env(
         seed=FLAGS.seed,
         clip_ids=clip_ids,
         start_steps=start_steps,
