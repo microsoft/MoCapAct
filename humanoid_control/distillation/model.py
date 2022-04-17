@@ -400,6 +400,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         optimizer_scheduler_class: Type[torch.optim.lr_scheduler._LRScheduler] = None,
         optimizer_scheduler_kwargs: Optional[Dict[str, Any]] = None
     ):
+        assert 0 <= embedding_correlation <= 1
         super().__init__(observation_space, action_space, observables, ref_steps, learning_rate, activation_fn,
                          squash_output, std_dev, features_extractor_class, features_extractor_kwargs,
                          optimizer_class, optimizer_kwargs, optimizer_scheduler_class,
@@ -816,7 +817,7 @@ class GPTPolicy(BasePolicy):
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False
     ) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
-        self.set_training_mode(False)
+        self.set_training_mode(not deterministic)
 
         observation, vectorized_env = self.obs_to_tensor(observation)
 
