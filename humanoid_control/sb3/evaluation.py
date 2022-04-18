@@ -18,6 +18,8 @@ def evaluate_locomotion_policy(
     reward_threshold: Optional[float] = None,
     return_episode_rewards: bool = False,
     warn: bool = True,
+    expert: "stable_baselines3.PPO" = None,
+    warmup_steps: int = 0,
 ) -> Union[Tuple[float, float], Tuple[List[float], List[int]]]:
     """
     Runs policy for ``n_eval_episodes`` episodes and returns average reward.
@@ -87,11 +89,16 @@ def evaluate_locomotion_policy(
     observations = env.reset()
     states = None
     frames = []
+    t = 0
     episode_starts = np.ones((env.num_envs,), dtype=bool)
     while (episode_counts < episode_count_targets).any():
         actions, states = model.predict(observations, state=states,
                                         episode_start=episode_starts,
                                         deterministic=deterministic)
+        if expert is not None and warmup_steps > 0 and t < warmup_steps:
+            actions, _ = expert.predict(observations, None, deterministic=deterministic)
+        t += 1
+
         observations, rewards, dones, infos = env.step(actions)
         current_rewards += rewards
         current_lengths += 1
@@ -128,6 +135,7 @@ def evaluate_locomotion_policy(
                         episode_counts[i] += 1
                     current_rewards[i] = 0
                     current_lengths[i] = 0
+                    t = 0
 
         if render:
             # Custom rendering using the physics object of the first vec env.
