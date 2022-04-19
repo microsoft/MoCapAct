@@ -172,7 +172,7 @@ def main(_):
             expert = get_expert(expert_paths, clip_id, start_step)
         action, state = policy.predict(env._get_obs(time_step), state, deterministic=FLAGS.deterministic)
         if t < FLAGS.warmup_steps:
-            action, _ = expert.predict(env._get_obs(time_step), None, deterministic=FLAGS.deterministic)
+            action, _ = expert.predict(env._get_obs(time_step), None, deterministic=True)
         t += 1
         return action
 
