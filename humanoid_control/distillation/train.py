@@ -25,6 +25,7 @@ flags.DEFINE_string("output_root", None, "Output directory to save the model and
 flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
 flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
 flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning's loop over the validation set")
+flags.DEFINE_integer("validation_freq", int(1e4), "How often (in iterations) to do validation loop")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 
@@ -149,6 +150,10 @@ def main(_):
 
     train_loader = DataLoader(train_dataset, shuffle=True, pin_memory=True,
                               batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
+    if FLAGS.val_dataset_paths is not None and FLAGS.do_validation_loop:
+        val_loader = DataLoader(val_dataset, batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
+    else:
+        val_loader = None
 
     ############
     # Callbacks
@@ -201,13 +206,13 @@ def main(_):
         max_time=timedelta(hours=FLAGS.n_hours),
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
+        val_check_interval=FLAGS.validation_freq,
         deterministic=True,
         benchmark=True,
         callbacks=train_callbacks,
-        logger=[csv_logger, tb_logger],
-        profiler="simple"
+        logger=[csv_logger, tb_logger]
     )
-    trainer.fit(policy, train_loader, ckpt_path=FLAGS.load_path)
+    trainer.fit(policy, train_loader, val_dataloaders=val_loader, ckpt_path=FLAGS.load_path)
 
 if __name__ == '__main__':
     app.run(main)
