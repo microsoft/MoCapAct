@@ -214,7 +214,7 @@ def main(_):
         max_time=timedelta(hours=FLAGS.n_hours),
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
-        val_check_interval=FLAGS.validation_freq,
+        val_check_interval=FLAGS.validation_freq if val_loader is not None else None,
         deterministic=True,
         benchmark=True,
         callbacks=train_callbacks,
