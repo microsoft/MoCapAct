@@ -167,7 +167,15 @@ def main(_):
         train_time_interval=timedelta(minutes=FLAGS.save_every_n_minutes)
     )
     train_callbacks.append(last_model_callback)
-    for eval_mode in FLAGS.eval_mode:
+    if val_loader is not None: # Validation set callback
+        train_callbacks.append(pl.callbacks.ModelCheckpoint(
+            dirpath=osp.join(output_dir, "eval/validation"),
+            filename="best",
+            monitor="val_loss/mse",
+            save_top_k=1,
+            every_n_train_steps=FLAGS.validation_freq+1 # add one to ensure it saves after the validation
+        ))
+    for eval_mode in FLAGS.eval_mode: # Policy evaluation callbacks
         is_train_dataset = (eval_mode.startswith("train"))
         always_init_at_clip_start = (eval_mode.endswith("start"))
         prefix = (
