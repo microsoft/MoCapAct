@@ -9,6 +9,9 @@ from gym import spaces
 from torch.utils.data import Dataset
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 from humanoid_control import observables
+import os
+import glob
+from tqdm import tqdm
 
 def weighted_average(arrays, weights):
     total = 0
@@ -33,7 +36,15 @@ class ExpertDataset(Dataset):
         temperature: Optional[float] = None,
         max_weight: float = float('inf') #20.
     ):
-        self._dsets = [h5py.File(fname, 'r') for fname in h5py_fnames]
+        print('Creating Expert Dataset')
+        if len(h5py_fnames) == 1 and os.path.isdir(h5py_fnames[0]):
+            print('Globbing for hdf5s')
+            h5py_fnames = glob.glob(os.path.join(h5py_fnames[0], '*.hdf5'))
+        print('Collected list of hdf5 fnames:', h5py_fnames)
+        self._dsets = []
+        for fname in tqdm(h5py_fnames, desc='Loading hdf5 datasets'):
+            self._dsets.append(h5py.File(fname, 'r'))
+        # self._dsets = [h5py.File(fname, 'r') for fname in h5py_fnames]
         self._observables = observables
 
         self._clip_ids = []
@@ -41,9 +52,10 @@ class ExpertDataset(Dataset):
             if clip_ids is None:
                 self._clip_ids.append(tuple([k for k in dset.keys() if k.startswith('CMU')]))
             else:
-                self._clip_ids.append(tuple([k for k in clip_ids if k in dset.keys()]))
+                self._clip_ids.append(tuple([k for k in dset.keys() if k.startswith('CMU') and k.split('-')[0] in clip_ids]))
         self._all_clip_ids = tuple(itertools.chain.from_iterable(self._clip_ids))
-        self._unique_clip_ids = tuple([k.split('-')[0] for k in self._all_clip_ids])
+        self._unique_clip_ids = tuple(set([k.split('-')[0] for k in self._all_clip_ids]))
+        print('Training on unique clip ids: ', self._unique_clip_ids)
         self._min_seq_steps = min_seq_steps
         self._max_seq_steps = max_seq_steps
         self._concat_observables = concat_observables
