@@ -61,6 +61,7 @@ eval_config.min_steps = 15
 eval_config.termination_error_threshold = 0.3
 eval_config.n_workers = 8
 eval_config.seed = 0
+eval_config.serial = False
 flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_start", "val_random"], "What dataset and initialization to do evaluation on")
 config_flags.DEFINE_config_dict("eval", eval_config)
 
@@ -200,6 +201,7 @@ def main(_):
             FLAGS.eval.seed,
             prefix + '_',
             osp.join(output_dir, 'eval', prefix),
+            serial_evaluation=FLAGS.eval.serial,
             record_video=FLAGS.record_video,
             verbose=1
         )
