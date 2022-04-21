@@ -115,7 +115,7 @@ class BCQ(object):
 
     def select_action(self, state):
         with torch.no_grad():
-            state = torch.FloatTensor(state.reshape(1, -1)).repeat(100, 1).to(self.device)
+            state = torch.FloatTensor(state).repeat(100, 1).to(self.device)
             action = self.actor(state, self.vae.decode(state))
             q1 = self.critic.q1(state, action)
             ind = q1.argmax(0)

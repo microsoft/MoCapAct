@@ -91,7 +91,7 @@ def make_env(
     always_init_at_clip_start=False,
     record_video=False,
     video_folder=None,
-    n_workers=1,
+    n_workers=2,
     termination_error_threshold=float('inf'),
     gamma=0.95,
     normalize_obs=True,
@@ -137,12 +137,12 @@ def eval_policy(
 ):
     ret = 0.
     for _ in range(eval_episodes):
-        obs_dict, done = eval_env.reset(), False
-        while not done:
-            obs = np.concatenate(list({k: obs_dict[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
-            action = policy.select_action(obs)
-            obs_dict, reward, done, info = eval_env.step([action])
-            ret += np.average(reward)
+        obs_dicts, dones = eval_env.reset(), np.array([False] * eval_env.num_envs)
+        while not dones.any():
+            obs = np.concatenate(list({k: obs_dicts[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
+            actions = policy.select_action(obs)
+            obs_dicts, rewards, dones, infos = eval_env.step(actions)
+            ret += np.average(rewards)
 
     avg_reward = ret / eval_episodes
 
