@@ -8,9 +8,9 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVide
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control.envs import env_util
+from humanoid_control.envs import tracking
 from humanoid_control.sb3 import evaluation
-from humanoid_control.sb3 import tracking
-from humanoid_control.envs import wrappers
+from humanoid_control.sb3 import wrappers
 
 class PolicyEvaluationCallback(Callback):
     """

@@ -21,10 +21,10 @@ from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
 from humanoid_control import utils
 from humanoid_control.envs import env_util
-from humanoid_control.sb3 import features_extractor
 from humanoid_control.envs import tracking
-from humanoid_control.sb3 import utils as sb3_utils
 from humanoid_control.envs import wrappers
+from humanoid_control.sb3 import features_extractor
+from humanoid_control.sb3 import utils as sb3_utils
 from humanoid_control.clip_expert import callbacks
 
 FLAGS = flags.FLAGS

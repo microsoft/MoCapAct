@@ -16,8 +16,8 @@ from humanoid_control import observables
 from humanoid_control.envs import env_util
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import tracking
-from humanoid_control.envs import wrappers
+from humanoid_control.sb3 import wrappers
+from humanoid_control.envs import tracking
 
 MIN_STEPS = 10
 
