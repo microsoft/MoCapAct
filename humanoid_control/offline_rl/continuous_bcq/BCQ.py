@@ -113,13 +113,15 @@ class BCQ(object):
         self.lmbda = lmbda
         self.device = device
 
-    def select_action(self, state):
+    def select_action(self, states):
         with torch.no_grad():
-            state = torch.FloatTensor(state).repeat(100, 1).to(self.device)
-            action = self.actor(state, self.vae.decode(state))
-            q1 = self.critic.q1(state, action)
+            num_envs = states.shape[0]
+            states = torch.FloatTensor(states).repeat(100, 1).to(self.device)
+            actions = self.actor(states, self.vae.decode(states))
+            q1 = self.critic.q1(states, actions)
+            q1 = torch.cat([q1.index_select(0, t) for t in [torch.LongTensor(range(i, q1.shape[0], num_envs)) for i in range(num_envs)]], 1)
             ind = q1.argmax(0)
-        return action[ind].cpu().data.numpy().flatten()
+        return actions[ind].cpu().data.numpy()
 
     def train(self, replay_buffer, iterations, batch_size=100):
         for it in range(iterations):
