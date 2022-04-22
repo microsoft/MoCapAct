@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecVideoRecorder
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control.envs import env_util
@@ -30,6 +30,7 @@ class PolicyEvaluationCallback(Callback):
         seed: int,
         prefix: str,
         log_dir: str,
+        serial_evaluation: bool = False,
         record_video: bool = False,
         verbose: int = 0
     ) -> None:
@@ -51,6 +52,7 @@ class PolicyEvaluationCallback(Callback):
         self._log_dir = log_dir
         self.n_calls = 0
         self._best_reward = float('-inf')
+        self._serial_evaluation = serial_evaluation
         self._record_video = record_video
         self.verbose = verbose
 
@@ -79,7 +81,7 @@ class PolicyEvaluationCallback(Callback):
             n_envs=self._n_workers,
             seed=self._seed,
             env_kwargs=env_kwargs,
-            vec_env_cls=SubprocVecEnv,
+            vec_env_cls=SubprocVecEnv if not self._serial_evaluation else DummyVecEnv,
             vec_monitor_cls=wrappers.MocapTrackingVecMonitor
         )
         if self._record_video:

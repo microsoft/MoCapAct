@@ -4,10 +4,11 @@ from gym import core, spaces
 from dm_control import composer
 from dm_control.locomotion.arenas import floors
 from dm_control.locomotion.mocap import cmu_mocap_data
-from dm_control.locomotion.tasks.reference_pose import tracking
 from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.locomotion.walkers import cmu_humanoid
 from dm_control.suite.wrappers import action_noise
+
+from humanoid_control.tasks import tracking
 
 
 class MocapTrackingGymEnv(core.Env):

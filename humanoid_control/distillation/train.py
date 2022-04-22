@@ -25,6 +25,7 @@ flags.DEFINE_string("output_root", None, "Output directory to save the model and
 flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
 flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
 flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning's loop over the validation set")
+flags.DEFINE_integer("validation_freq", int(1e4), "How often (in iterations) to do validation loop")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 
@@ -60,6 +61,7 @@ eval_config.min_steps = 15
 eval_config.termination_error_threshold = 0.3
 eval_config.n_workers = 8
 eval_config.seed = 0
+eval_config.serial = False
 flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_start", "val_random"], "What dataset and initialization to do evaluation on")
 config_flags.DEFINE_config_dict("eval", eval_config)
 
@@ -149,6 +151,10 @@ def main(_):
 
     train_loader = DataLoader(train_dataset, shuffle=True, pin_memory=True,
                               batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
+    if FLAGS.val_dataset_paths is not None and FLAGS.do_validation_loop:
+        val_loader = DataLoader(val_dataset, batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
+    else:
+        val_loader = None
 
     ############
     # Callbacks
@@ -162,7 +168,15 @@ def main(_):
         train_time_interval=timedelta(minutes=FLAGS.save_every_n_minutes)
     )
     train_callbacks.append(last_model_callback)
-    for eval_mode in FLAGS.eval_mode:
+    if val_loader is not None: # Validation set callback
+        train_callbacks.append(pl.callbacks.ModelCheckpoint(
+            dirpath=osp.join(output_dir, "eval/validation"),
+            filename="best",
+            monitor="val_loss/mse",
+            save_top_k=1,
+            every_n_train_steps=FLAGS.validation_freq+1 # add one to ensure it saves after the validation
+        ))
+    for eval_mode in FLAGS.eval_mode: # Policy evaluation callbacks
         is_train_dataset = (eval_mode.startswith("train"))
         always_init_at_clip_start = (eval_mode.endswith("start"))
         prefix = (
@@ -187,6 +201,7 @@ def main(_):
             FLAGS.eval.seed,
             prefix + '_',
             osp.join(output_dir, 'eval', prefix),
+            serial_evaluation=FLAGS.eval.serial,
             record_video=FLAGS.record_video,
             verbose=1
         )
@@ -201,13 +216,13 @@ def main(_):
         max_time=timedelta(hours=FLAGS.n_hours),
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
+        val_check_interval=FLAGS.validation_freq if val_loader is not None else None,
         deterministic=True,
         benchmark=True,
         callbacks=train_callbacks,
-        logger=[csv_logger, tb_logger],
-        profiler="simple"
+        logger=[csv_logger, tb_logger]
     )
-    trainer.fit(policy, train_loader, ckpt_path=FLAGS.load_path)
+    trainer.fit(policy, train_loader, val_dataloaders=val_loader, ckpt_path=FLAGS.load_path)
 
 if __name__ == '__main__':
     app.run(main)
