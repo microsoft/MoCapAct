@@ -17,7 +17,7 @@ def make_vec_env(
     env_kwargs: Optional[Dict[str, Any]] = None,
     vec_env_cls: Optional[Type[Union[DummyVecEnv, SubprocVecEnv]]] = None,
     vec_env_kwargs: Optional[Dict[str, Any]] = None,
-    vec_monitor_cls=VecMonitor,
+    vec_monitor_cls: VecMonitor = VecMonitor,
     monitor_kwargs: Optional[Dict[str, Any]] = None,
     wrapper_kwargs: Optional[Dict[str, Any]] = None,
 ) -> VecEnv:
