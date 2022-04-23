@@ -16,7 +16,7 @@ from stable_baselines3.common import env_util
 from stable_baselines3.common import evaluation
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.tasks import stand
-from humanoid_control.sb3 import wrappers
+from humanoid_control.envs import wrappers
 from humanoid_control.joint import model
 
 from humanoid_control.joint.ppo import PPOBC

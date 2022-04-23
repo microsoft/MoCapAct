@@ -13,11 +13,11 @@ from dm_control.viewer import application
 
 from humanoid_control import observables
 from humanoid_control import utils
+from humanoid_control.envs import tracking
 from humanoid_control.sb3 import env_util
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import wrappers
 from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import tracking
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_path", None, "Path where saved policy is stored")
