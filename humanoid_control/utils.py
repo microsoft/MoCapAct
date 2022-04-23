@@ -45,6 +45,9 @@ def get_clip_length(clip_id):
 
 
 class AzureBlobConnector():
+    """
+    Class to connect to Azure Blob Storage and download/upload files, handling the authentication, retry policy and other complexities of the protocol.
+    """
     def __init__(self, blob_url: str = None, account_name: str = None, sas_token: str = None, connection_string: str = None, container_name: str = None):
         retry_policy = ExponentialRetry(retry_total=6)
         if blob_url:

@@ -330,12 +330,3 @@ class ExpertDataset(Dataset):
         weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
         return obs, act, weight
-
-if __name__ == "__main__":
-    dset = ExpertDataset(
-        [os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, 'data', 'example.hdf5')],
-        observables.MULTI_CLIP_OBSERVABLES_SANS_ID
-    )
-
-    sample = dset[100]
-    print(sample)
