@@ -42,7 +42,7 @@ flags.DEFINE_integer("progress_bar_refresh_rate", 1, "How often to refresh progr
 flags.DEFINE_bool("track_grad_norm", False, "Whether to log the gradient norm")
 flags.DEFINE_bool("clip_centric_weight", False, "Whether to use a weight defined solely by the clip or also by the state and action")
 flags.DEFINE_bool("advantage_weights", True, "Whether to use AWR or RWR")
-flags.DEFINE_float("temperature", None, "AWR temperature")
+flags.DEFINE_float("temperature", None, "Weighting temperature")
 
 # Model hyperparameters
 config_file = "humanoid_control/distillation/config.py"
