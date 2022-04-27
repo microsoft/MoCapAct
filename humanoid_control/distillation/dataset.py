@@ -128,7 +128,7 @@ class ExpertDataset(Dataset):
             k: spaces.Box(-np.infty, np.infty, shape=v.shape, dtype=np.float32)
             for k, v in self.observable_indices.items()
         }
-        obs_spaces['walker/clip_id'] = spaces.Discrete(len(self._unique_clip_ids))
+        obs_spaces['walker/clip_id'] = spaces.Discrete(len(self._all_clip_snippets))
         self._full_observation_space = spaces.Dict(obs_spaces)
 
         # Observation space for the observables we're considering
