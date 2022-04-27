@@ -105,7 +105,6 @@ def main(_):
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
         normalize_obs=False, #FLAGS.normalize_obs,
-        preload=FLAGS.preload_dataset,
         clip_centric_weight=FLAGS.clip_centric_weight,
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
@@ -120,7 +119,6 @@ def main(_):
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=False, #FLAGS.normalize_obs,
-            preload=FLAGS.preload_dataset,
             clip_centric_weight=FLAGS.clip_centric_weight,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
@@ -129,12 +127,11 @@ def main(_):
 
     if FLAGS.normalize_obs:
         obs_rms = {}
-        observable_indices = train_dataset.observable_indices['walker']
-        for k in observable_indices:
-            rms = RunningMeanStd(shape=(len(observable_indices[k]),))
-            rms.mean = train_dataset.obs_mean[observable_indices[k]]
-            rms.var = train_dataset.obs_var[observable_indices[k]]
-            obs_rms[f"walker/{k}"] = rms
+        for obs_key, obs_indices in train_dataset.observable_indices.items():
+            rms = RunningMeanStd(shape=obs_indices.shape)
+            rms.mean = train_dataset.obs_mean[obs_indices]
+            rms.var = train_dataset.obs_var[obs_indices]
+            obs_rms[obs_key] = rms
     else:
         obs_rms = None
 
@@ -189,8 +186,8 @@ def main(_):
             Path(osp.join(output_dir, 'eval', prefix)).mkdir(parents=True, exist_ok=True)
         eval_dataset = train_dataset if is_train_dataset else val_dataset
         eval_callback = callbacks.PolicyEvaluationCallback(
-            eval_dataset.all_clip_ids,
-            eval_dataset.ref_steps[...],
+            eval_dataset.all_clip_snippets,
+            eval_dataset.ref_steps,
             FLAGS.eval.n_episodes,
             FLAGS.eval.freq,
             FLAGS.eval.act_noise,
