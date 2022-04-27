@@ -21,6 +21,7 @@ from stable_baselines3.common import torch_layers
 
 from humanoid_control import utils
 from humanoid_control.sb3 import features_extractor
+from humanoid_control.sb3.torch_layers import create_mlp
 
 def count_parameters(parameters):
     return sum(p.numel() for p in parameters)
@@ -371,6 +372,41 @@ class HierarchicalMlpPolicy(BasePolicy):
         act_gaussian, *_ = self.forward(features, deterministic=deterministic)
         return act_gaussian.mean, state
 
+class ReferenceEncoder(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        embed_dim: int,
+        n_layers: int,
+        layer_size: int,
+        activation_fn: Type[nn.Module],
+        layer_norm: bool = False,
+        predict_delta_embed: bool = False,
+        embedding_correlation: float = 0.95
+    ):
+        super().__init__()
+        layers = create_mlp(
+            input_dim + embed_dim,
+            2*embed_dim,
+            net_arch=n_layers*[layer_size],
+            activation_fn=activation_fn,
+            layer_norm=layer_norm
+        )
+        self.reference_encoder = nn.Sequential(*layers)
+        self.embed_dim = embed_dim
+        self.predict_delta_embed = predict_delta_embed
+        self.embedding_correlation = embedding_correlation
+
+    def forward(self, input: torch.Tensor, prev_embed: torch.Tensor):
+        embed_mean, embed_log_std = torch.split(
+            self.reference_encoder(torch.cat([input, prev_embed], dim=-1)),
+            self.embed_dim,
+            dim=-1
+        )
+        if self.predict_delta_embed:
+            embed_mean += self.embedding_correlation*prev_embed
+        return Independent(Normal(embed_mean, embed_log_std.exp()), 1)
+
 class HierarchicalRnnPolicy(BasePolicy):
     def __init__(
         self,
@@ -418,27 +454,25 @@ class HierarchicalRnnPolicy(BasePolicy):
         self.seq_steps = seq_steps
         self.truncated_bptt_steps = min(truncated_bptt_steps, seq_steps) if truncated_bptt_steps else seq_steps
 
-        reference_encoder_layers = torch_layers.create_mlp(
-            self.features_extractor.sub_features_dim['ref_encoder'] + self.embed_size,
-            2*self.embed_size,
-            net_arch=self.ref_encoder_n_layers*[self.ref_encoder_layer_size],
-            activation_fn=self.activation_fn
+        self.reference_encoder = ReferenceEncoder(
+            self.features_extractor.sub_features_dim['ref_encoder'],
+            self.embed_size,
+            self.ref_encoder_n_layers,
+            self.ref_encoder_layer_size,
+            self.activation_fn,
+            self.layer_norm,
+            self.predict_delta_embed,
+            self.embedding_correlation
         )
-        if self.layer_norm:
-            for layer in range(1, 3*self.ref_encoder_n_layers-1, 3):
-                reference_encoder_layers.insert(layer, nn.LayerNorm(self.ref_encoder_layer_size))
-        self.reference_encoder = nn.Sequential(*reference_encoder_layers)
 
-        action_decoder_layers = torch_layers.create_mlp(
+        action_decoder_layers = create_mlp(
             self.features_extractor.sub_features_dim['decoder'] + self.embed_size,
             self.action_space.shape[0],
             net_arch=self.decoder_n_layers*[self.decoder_layer_size],
             activation_fn=self.activation_fn,
-            squash_output=self.squash_output
+            squash_output=self.squash_output,
+            layer_norm=self.layer_norm
         )
-        if self.layer_norm:
-            for layer in range(1, 3*self.decoder_n_layers-1, 3):
-                action_decoder_layers.insert(layer, nn.LayerNorm(self.decoder_layer_size))
         self.action_decoder = nn.Sequential(*action_decoder_layers)
 
     def _get_constructor_parameters(self) -> Dict[str, Any]:
@@ -455,7 +489,8 @@ class HierarchicalRnnPolicy(BasePolicy):
                 embedding_kl_weight=self.embedding_kl_weight,
                 embedding_correlation=self.embedding_correlation,
                 predict_delta_embed=self.predict_delta_embed,
-                seq_steps=self.seq_steps
+                seq_steps=self.seq_steps,
+                truncated_bptt_steps=self.truncated_bptt_steps
             )
         )
         return data
@@ -472,61 +507,65 @@ class HierarchicalRnnPolicy(BasePolicy):
         prev_embed: torch.Tensor,
         deterministic: bool = False
     ):
-        delta_embed_mean, embed_log_std = torch.split(
-            self.reference_encoder(torch.cat([ref_encoder_input, prev_embed], dim=-1)),
-            self.embed_size,
-            dim=-1
-        )
-        if self.predict_delta_embed:
-            embed_mean = delta_embed_mean + self.embedding_correlation*prev_embed
-        else:
-            embed_mean = delta_embed_mean
-        embed_gaussian = Independent(Normal(embed_mean, embed_log_std.exp()), -1)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), -1)
-        embed = embed_mean if deterministic else embed_gaussian.rsample()
+        embed, embed_distribution = self.ref_encoder_forward(ref_encoder_input, prev_embed, deterministic)
+        act_distribution = self.action_decoder_forward(decoder_input, embed)
+        return act_distribution, embed_distribution, embed
 
-        act = self.action_decoder(torch.cat([decoder_input, embed], dim=-1))
-        act_gaussian = Independent(Normal(act, self.std_dev), -1)
+    def ref_encoder_forward(
+        self,
+        ref_encoder_input: torch.Tensor,
+        prev_embed: torch.Tensor,
+        deterministic: bool = False
+    ):
+        embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
+        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
+        embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
-        return act_gaussian, embed_gaussian, embed
+        return embed, embed_distribution
+
+    def action_decoder_forward(
+        self,
+        proprio_input: torch.Tensor,
+        embed: torch.Tensor
+    ):
+        act = self.action_decoder(torch.cat([proprio_input, embed], dim=-1))
+        act_distribution = Independent(Normal(act, self.std_dev), 1)
+
+        return act_distribution
 
     def training_step(self, batch, batch_idx, hiddens):
         obs, acts, weights = batch
         features = self.extract_features(obs)
         references, proprios = features['ref_encoder'], features['decoder']
         B, T, _ = acts.shape
-        if hiddens is None:
-            embed = torch.as_tensor(self.initial_state(B))
-            embed = embed.type_as(acts)
-        else:
-            embed = hiddens
-        total_log_prob, total_mse, total_kl, total_embed_std, total_embed_dist = 0, 0, 0, 0, 0
+        embed = hiddens if hiddens is not None else torch.as_tensor(self.initial_state(B)).type_as(acts)
+        total_kl, total_embed_std, total_delta_embed = 0, 0, 0
         all_embeds = [embed]
         for t in range(T):
-            act_gaussian, next_embed_gaussian, next_embed = self(references[:, t], proprios[:, t], embed)
-
-            prior_gaussian = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), -1)
-            log_prob = act_gaussian.log_prob(acts[:, t])
-            mse = F.mse_loss(act_gaussian.mean, acts[:, t])
-            kl = kl_divergence(next_embed_gaussian, prior_gaussian).mean()
-            total_log_prob += weights[:, t] @ log_prob
-            total_mse += mse
+            next_embed, next_embed_distribution = self.ref_encoder_forward(references[:, t], embed)
+            prior_embed_distribution = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), 1)
+            kl = kl_divergence(next_embed_distribution, prior_embed_distribution).sum()
             total_kl += kl
-            total_embed_std += torch.norm(next_embed_gaussian.stddev, dim=-1).mean().item() / np.sqrt(self.embed_size)
-            total_embed_dist += torch.norm(next_embed_gaussian.mean - self.embedding_correlation*embed, dim=-1).mean().item() / np.sqrt(self.embed_size)
+            total_embed_std += next_embed_distribution.stddev.mean().item()
+            total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - self.embedding_correlation*embed))
 
             embed = next_embed
             all_embeds.append(embed)
-        
-        all_embeds = torch.stack(all_embeds, -1)
-        embed_mean = torch.norm(torch.mean(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
-        embed_std = torch.norm(torch.std(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
+        embeds = torch.stack(all_embeds, 1)
 
-        loss = (-total_log_prob + self.embedding_kl_weight*total_kl) / T
-        self.log("loss/mse", total_mse/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        act_distribution = self.action_decoder_forward(proprios, embeds[:, 1:])
+        log_prob = act_distribution.log_prob(acts)
+        mse = F.mse_loss(act_distribution.mean, acts)
+        weighted_log_prob = torch.einsum('ij,ij', weights, log_prob)
+        loss = (-weighted_log_prob + self.embedding_kl_weight*total_kl) / (B*T)
+
+        embed_mean = torch.mean(embeds, dim=1).abs().mean()
+        embed_std = torch.std(embeds, dim=1).abs().mean()
+
+        self.log("loss/mse", mse, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/kl_div", total_kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/delta_mean", total_embed_dist/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("embed/delta_mean", total_delta_embed/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/delta_std", total_embed_std/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/embed_mean", embed_mean, on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("embed/embed_std", embed_std, on_step=True, on_epoch=False, prog_bar=True, logger=True)
@@ -540,8 +579,8 @@ class HierarchicalRnnPolicy(BasePolicy):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         features = self.extract_features(observation)
         references, proprios = features['ref_encoder'], features['decoder']
-        act_gaussian, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
-        return act_gaussian.mean, next_embed
+        act_distribution, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
+        return act_distribution.mean, next_embed
 
     def tbptt_split_batch(self, batch, split_size):
         obs, acts, weights = batch
@@ -554,6 +593,9 @@ class HierarchicalRnnPolicy(BasePolicy):
             splits.append((obs_subseq, acts_subseq, weights_subseq))
         return splits
 
+#######
+# GPT
+#######
 class GPTConfig:
     """ base GPT config, params common to all GPT versions """
     embd_pdrop = 0.1
