@@ -404,7 +404,7 @@ class ReferenceEncoder(nn.Module):
             dim=-1
         )
         if self.predict_delta_embed:
-            embed_mean += self.embedding_correlation*prev_embed
+            embed_mean = embed_mean + self.embedding_correlation*prev_embed
         return Independent(Normal(embed_mean, embed_log_std.exp()), 1)
 
 class HierarchicalRnnPolicy(BasePolicy):
