@@ -1,20 +1,20 @@
-# HumanLocoMocap code
+# MoCapAct code
 
-This repo intends to track several experiments, tools and datasets for expert rollouts based on the CMU Mocap dataset and DM Control Humanoid Environment.
+This repo intends to track several experiments, tools and datasets for expert rollouts based on the CMU Mocap dataset and `dm_control` Humanoid Environment.
 
 ## Getting Started
-```console
+```bash
 conda create -n humcontrol pip python=3.7
 conda activate humcontrol
 pip install -e .
 ```
 
 ## MuJoCo dependencies
-Please follow instrunctions in [mujoco-py](https://github.com/openai/mujoco-py) and/or [dm_control](https://github.com/deepmind/dm_control)
+Please follow instrunctions in [`dm_control`](https://github.com/deepmind/dm_control)
 
 - Useful env variables to have in .bashrc:
 
-```console
+```bash
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco210/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia/lib64

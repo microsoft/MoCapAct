@@ -122,7 +122,7 @@ class MocapTrackingEvalCallback(EvalCallback):
         self,
         eval_env_ctor: Callable[[], Union[gym.Env, VecEnv]],
         callback_on_new_best: Optional[BaseCallback] = None,
-        early_stopping_callback: Optional[EarlyStoppingCallback] = None,
+        callback_after_eval: Optional[BaseCallback] = None,
         n_eval_episodes: int = 5,
         eval_freq: int = 10000,
         log_path: str = None,
@@ -136,6 +136,7 @@ class MocapTrackingEvalCallback(EvalCallback):
         self.eval_env_ctor = eval_env_ctor
         eval_env = eval_env_ctor()
         super().__init__(eval_env, callback_on_new_best=callback_on_new_best,
+                         callback_after_eval=callback_after_eval,
                          n_eval_episodes=n_eval_episodes, eval_freq=eval_freq,
                          log_path=log_path, best_model_save_path=best_model_save_path,
                          deterministic=deterministic, render=render,
@@ -144,22 +145,24 @@ class MocapTrackingEvalCallback(EvalCallback):
         self.evaluations_results_norm = []
         self.evaluations_length_norm = []
 
-        self.early_stopping_callback = early_stopping_callback
-        if early_stopping_callback is not None:
-            self.early_stopping_callback.parent = self
-
-    def _init_callback(self) -> None:
-        if self.early_stopping_callback is not None:
-            self.early_stopping_callback.init_callback(self.model)
-
     def _on_step(self) -> bool:
         """
         Additionally logs normalized reward and episode length.
         """
 
+        continue_training = True
+
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             # Sync training and eval env if there is VecNormalize
-            sync_envs_normalization(self.training_env, self.eval_env)
+            if self.model.get_vec_normalize_env() is not None:
+                try:
+                    sync_envs_normalization(self.training_env, self.eval_env)
+                except AttributeError:
+                    raise AssertionError(
+                        "Training and eval env are not wrapped the same way, "
+                        "see https://stable-baselines3.readthedocs.io/en/master/guide/callbacks.html#evalcallback "
+                        "and warning above."
+                    )
 
             self.eval_env.seed(0) # argument ignored
             results = evaluation.evaluate_locomotion_policy(
@@ -218,20 +221,19 @@ class MocapTrackingEvalCallback(EvalCallback):
             self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
             self.logger.dump(self.num_timesteps)
 
-            continue_training = True
             if mean_reward > self.best_mean_reward:
                 if self.verbose > 0:
                     print("New best mean reward!")
                 if self.best_model_save_path is not None:
                     self.model.save(os.path.join(self.best_model_save_path, "best_model"))
                 self.best_mean_reward = mean_reward
+                # Trigger callback on new best model, if needed
+                if self.callback_on_new_best is not None:
+                    continue_training = self.callback_on_new_best.on_step()
 
-                # Trigger callback if needed
-                if self.callback is not None:
-                    continue_training &= self._on_event()
-
-            if self.early_stopping_callback is not None:
-                continue_training &= self.early_stopping_callback.on_step()
+            # Trigger callback after every evaluation, if needed
+            if self.callback is not None:
+                continue_training = continue_training and self._on_event()
 
             return continue_training
 

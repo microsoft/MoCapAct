@@ -22,9 +22,9 @@ from humanoid_control import observables
 from humanoid_control import utils
 from humanoid_control.envs import env_util
 from humanoid_control.envs import tracking
-from humanoid_control.envs import wrappers
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.sb3 import utils as sb3_utils
+from humanoid_control.sb3 import wrappers
 from humanoid_control.clip_expert import callbacks
 
 FLAGS = flags.FLAGS
@@ -71,7 +71,7 @@ eval_config.n_start_episodes = 32                       # Number of episodes to 
 eval_config.start_eval_act_noise = 0.1                  # Action noise to apply for start of snippet
 eval_config.early_stop = ml_collections.ConfigDict()
 eval_config.early_stop.ep_length_threshold = 1.         # Episode length threshold for early stopping
-eval_config.early_stop.min_reward_delta = float('inf')  # Minimum change in normalized reward to qualify as improvement
+eval_config.early_stop.min_reward_delta = 0.            # Minimum change in normalized reward to qualify as improvement
 eval_config.early_stop.patience = 10                    # Number of queries with no improvement after which training is stopped
 config_flags.DEFINE_config_dict("eval", eval_config)
 
@@ -237,21 +237,15 @@ def main(_):
         logger = configure(log_dir, format_strings)
 
     # Rollout environment
-    env = env_util.make_env(
+    env = make_env(
         seed=FLAGS.seed,
-        clip_ids=[FLAGS.clip_id],
-        start_steps=[FLAGS.start_step],
-        end_steps=[end_step],
+        start_step=FLAGS.start_step,
+        end_step=end_step,
         min_steps=FLAGS.min_steps,
         training=True,
         act_noise=0.,
         always_init_at_clip_start=False,
-        record_video=FLAGS.record_video,
-        n_workers=FLAGS.n_workers,
-        termination_error_threshold=FLAGS.termination_error_threshold,
-        gamma=FLAGS.gamma,
-        normalize_obs=FLAGS.normalize_observation,
-        normalize_rew=FLAGS.normalize_reward
+        termination_error_threshold=FLAGS.termination_error_threshold
     )
 
     # Evaluation environment where start point is selected at random
@@ -278,7 +272,7 @@ def main(_):
         log_path=random_eval_path,
         eval_freq=eval_freq,
         callback_on_new_best=callback_on_new_best,
-        early_stopping_callback=early_stopping_callback,
+        callback_after_eval=early_stopping_callback,
         n_eval_episodes=FLAGS.eval.n_random_episodes,
         deterministic=True,
         render=False,
@@ -317,7 +311,7 @@ def main(_):
     # experiment_root = osp.abspath(osp.join(log_dir, osp.pardir))
     # evaluation_paths = glob.glob(osp.join(experiment_root, '**/eval_random/evaluations.npz'), recursive=True)
     warm_start_root = FLAGS.warm_start_root or osp.abspath(osp.join(log_dir, osp.pardir))
-    warm_start_root = osp.join(FLAGS.warm_start_root, f"{FLAGS.clip_id}-{FLAGS.start_step}/{FLAGS.seed}")
+    warm_start_root = osp.join(warm_start_root, f"{FLAGS.clip_id}-{FLAGS.start_step}-{end_step}/{FLAGS.seed}")
     evaluation_paths = glob.glob(osp.join(warm_start_root, '**/eval_random/evaluations.npz'), recursive=True)
     warm_start_path = get_warm_start_path(evaluation_paths)
     if warm_start_path is None:
