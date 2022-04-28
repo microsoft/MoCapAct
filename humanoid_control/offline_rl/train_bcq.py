@@ -209,12 +209,11 @@ def main(_):
 
     if FLAGS.normalize_obs:
         obs_rms = {}
-        observable_indices = train_dataset.observable_indices['walker']
-        for k in observable_indices:
-            rms = RunningMeanStd(shape=(len(observable_indices[k]),))
-            rms.mean = train_dataset.obs_mean[observable_indices[k]]
-            rms.var = train_dataset.obs_var[observable_indices[k]]
-            obs_rms[f"walker/{k}"] = rms
+        for obs_key, obs_indices in train_dataset.observable_indices.items():
+            rms = RunningMeanStd(shape=obs_indices.shape)
+            rms.mean = train_dataset.obs_mean[obs_indices]
+            rms.var = train_dataset.obs_var[obs_indices]
+            obs_rms[obs_key] = rms
     else:
         obs_rms = None
 
