@@ -120,7 +120,6 @@ def make_env(
         seed=seed,
         env_kwargs=env_kwargs,
         vec_env_cls=DummyVecEnv,  # SubprocVecEnv
-        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
     )
     if record_video and video_folder:
         env = VecVideoRecorder(env, video_folder,
