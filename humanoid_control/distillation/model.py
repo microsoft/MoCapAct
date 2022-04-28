@@ -546,7 +546,7 @@ class HierarchicalRnnPolicy(BasePolicy):
             prior_embed_distribution = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), 1)
             kl = kl_divergence(next_embed_distribution, prior_embed_distribution).sum()
             total_kl += kl
-            total_embed_std += next_embed_distribution.stddev.mean().item()
+            total_embed_std += next_embed_distribution.stddev.mean()
             total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - self.embedding_correlation*embed))
 
             embed = next_embed
@@ -562,13 +562,13 @@ class HierarchicalRnnPolicy(BasePolicy):
         embed_mean = torch.mean(embeds, dim=1).abs().mean()
         embed_std = torch.std(embeds, dim=1).abs().mean()
 
-        self.log("loss/mse", mse, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/kl_div", total_kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/delta_mean", total_delta_embed/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/delta_std", total_embed_std/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/embed_mean", embed_mean, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/embed_std", embed_std, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/mse", mse.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/kl_div", total_kl.item()/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("loss/loss", loss.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("embed/delta_mean", total_delta_embed.item()/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("embed/delta_std", total_embed_std.item()/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("embed/embed_mean", embed_mean.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        self.log("embed/embed_std", embed_std.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True)
         return dict(loss=loss, hiddens=embed)
 
     def _predict(

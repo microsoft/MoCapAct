@@ -79,10 +79,10 @@ class MocapTrackingGymEnv(core.Env):
         return {k: obs[k].ravel() for k in self.observation_space.spaces}
 
     def _create_env(self, ref_steps, dataset, act_noise, task_kwargs, environment_kwargs):
-        walker = cmu_humanoid.CMUHumanoidPositionControlledV2020
+        walker_type = cmu_humanoid.CMUHumanoidPositionControlledV2020
         arena = floors.Floor()
         task = tracking.MultiClipMocapTracking(
-            walker,
+            walker_type,
             arena,
             cmu_mocap_data.get_path_for_cmu(version='2020'),
             ref_steps,
