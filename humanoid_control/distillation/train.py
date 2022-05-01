@@ -1,11 +1,10 @@
 import os
 import os.path as osp
 import random
-import collections
+import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 from absl import flags, app
-from pandas import concat
 from torch.utils.data.dataloader import DataLoader
 import ml_collections
 from ml_collections.config_flags import config_flags
@@ -28,6 +27,7 @@ flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning
 flags.DEFINE_integer("validation_freq", int(1e4), "How often (in iterations) to do validation loop")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
+flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics, if desired")
 
 # Training hyperparameters
 flags.DEFINE_integer("n_hours", 24, "Number of hours to train")
@@ -40,7 +40,7 @@ flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to R
 flags.DEFINE_integer("seed", 0, "RNG seed")
 flags.DEFINE_integer("progress_bar_refresh_rate", 1, "How often to refresh progress bar")
 flags.DEFINE_bool("track_grad_norm", False, "Whether to log the gradient norm")
-flags.DEFINE_bool("clip_centric_weight", False, "Whether to use a weight defined solely by the clip or also by the state and action")
+flags.DEFINE_bool("clip_weighted", False, "Whether to use a weight defined solely by the clip or also by the state and action")
 flags.DEFINE_bool("advantage_weights", True, "Whether to use AWR or RWR")
 flags.DEFINE_float("temperature", None, "Weighting temperature")
 
@@ -71,25 +71,6 @@ flags.mark_flag_as_required("train_dataset_paths")
 def main(_):
     output_dir = osp.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
 
-    # Log some stuff (but only in process 0)
-    if os.getenv("LOCAL_RANK", "0") == "0":
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        print(FLAGS.flags_into_string())
-        with open(osp.join(output_dir, 'flags.txt'), 'w') as f:
-            f.write(FLAGS.flags_into_string())
-        with open(osp.join(output_dir, 'model_constructor.txt'), 'w') as f:
-            f.write(FLAGS.model.constructor)
-
-    pl.seed_everything(FLAGS.seed, workers=True)
-
-    # If desired, randomize order of dataset paths
-    if FLAGS.randomly_load_hdf5:
-        print(FLAGS.train_dataset_paths)
-        random.shuffle(FLAGS.train_dataset_paths)
-        print(FLAGS.train_dataset_paths)
-        if FLAGS.val_dataset_paths is not None:
-            random.shuffle(FLAGS.val_dataset_paths)
-
     # Make supervision dataset
     if hasattr(FLAGS.model.config, 'seq_steps'):
         seq_steps = FLAGS.model.config.seq_steps
@@ -98,6 +79,52 @@ def main(_):
     else:
         seq_steps = 1
 
+
+    # Log some stuff (but only in process 0)
+    if os.getenv("LOCAL_RANK", "0") == "0":
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        print(FLAGS.flags_into_string())
+        with open(osp.join(output_dir, 'flags.txt'), 'w') as f:
+            f.write(FLAGS.flags_into_string())
+        with open(osp.join(output_dir, 'model_constructor.txt'), 'w') as f:
+            f.write(FLAGS.model.constructor)
+        if FLAGS.dataset_metrics_path is None:
+            dset = dataset.ExpertDataset(
+                FLAGS.train_dataset_paths,
+                observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
+                FLAGS.clip_ids,
+                min_seq_steps=seq_steps,
+                max_seq_steps=seq_steps,
+                normalize_obs=False,
+                clip_weighted=FLAGS.clip_weighted,
+                advantage_weights=FLAGS.advantage_weights,
+                temperature=FLAGS.temperature,
+                concat_observables=False
+            )
+            np.savez(
+                osp.join(output_dir, 'dataset_metrics.npz'),
+                obs_mean=dset.obs_mean,
+                obs_var=dset.obs_var,
+                act_mean=dset.act_mean,
+                act_var=dset.act_var,
+                count=dset.count,
+                snippet_returns=dset.snippet_returns,
+                advantages=dset.advantages,
+                values=dset.values
+            )
+            del dset
+
+    pl.seed_everything(FLAGS.seed, workers=True)
+
+    dataset_metrics_path = FLAGS.dataset_metrics_path or osp.join(output_dir, 'dataset_metrics.npz')
+
+    # If desired, randomize order of dataset paths
+    if FLAGS.randomly_load_hdf5:
+        print(FLAGS.train_dataset_paths)
+        random.shuffle(FLAGS.train_dataset_paths)
+        print(FLAGS.train_dataset_paths)
+        if FLAGS.val_dataset_paths is not None:
+            random.shuffle(FLAGS.val_dataset_paths)
     train_dataset = dataset.ExpertDataset(
         FLAGS.train_dataset_paths,
         observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
@@ -105,10 +132,11 @@ def main(_):
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
         normalize_obs=False, #FLAGS.normalize_obs,
-        clip_centric_weight=FLAGS.clip_centric_weight,
+        clip_weighted=FLAGS.clip_weighted,
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
-        concat_observables=False
+        concat_observables=False,
+        metrics_path=dataset_metrics_path
     )
 
     if FLAGS.val_dataset_paths is not None:
@@ -119,10 +147,11 @@ def main(_):
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=False, #FLAGS.normalize_obs,
-            clip_centric_weight=FLAGS.clip_centric_weight,
+            clip_weighted=FLAGS.clip_weighted,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
-            concat_observables=False
+            concat_observables=False,
+            metrics_path=dataset_metrics_path
         )
 
     if FLAGS.normalize_obs:
@@ -186,7 +215,7 @@ def main(_):
             Path(osp.join(output_dir, 'eval', prefix)).mkdir(parents=True, exist_ok=True)
         eval_dataset = train_dataset if is_train_dataset else val_dataset
         eval_callback = callbacks.PolicyEvaluationCallback(
-            eval_dataset.all_clip_snippets,
+            eval_dataset.clip_snippets_flat,
             eval_dataset.ref_steps,
             FLAGS.eval.n_episodes,
             FLAGS.eval.freq,
