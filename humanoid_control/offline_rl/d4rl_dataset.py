@@ -137,7 +137,7 @@ class D4RLDataset(ExpertDataset):
             act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
             val_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/values"]
             adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
-            rew_dset = self._dsets[dset_idx][f"{self._dset_groups[dset_idx][clip_idx]}/rewards"]
+            rew_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/rewards"]
 
             if self.is_sequential:
                 start_idx = idx - self._logical_indices[dset_idx][clip_idx]
