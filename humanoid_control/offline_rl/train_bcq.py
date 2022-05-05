@@ -25,6 +25,9 @@ from humanoid_control.offline_rl.continuous_bcq.BCQ import BCQ
 
 FLAGS = flags.FLAGS
 
+# Experiment flags
+flags.DEFINE_bool("use_tensorboard", True, "Whether or not to log tensorboard events.")
+
 # Path flags
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
 flags.DEFINE_string("dataset_local_path", None, "Path to the dataset")
@@ -41,7 +44,6 @@ flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off ro
 flags.DEFINE_list("start_steps", [0], "Start step in clips")
 flags.DEFINE_integer("max_clip_steps", 256, "Maximum steps from start step")
 flags.DEFINE_integer("min_clip_steps", 1, "Minimum steps in a rollout")
-flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to RAM")
 flags.DEFINE_string("env_name", "MocapTrackingGymEnv", "Environment from which the dataset was generated")
 flags.DEFINE_integer("seed", 0, "Sets Gym, PyTorch and Numpy seeds")
 flags.DEFINE_string("buffer_name", "Robust", "Prefix for file names")
@@ -155,6 +157,11 @@ def main(_):
     output_dir = os.path.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
     os.makedirs(output_dir, exist_ok=True)
 
+    if FLAGS.use_tensorboard:
+        from tensorboardX import SummaryWriter
+        tb_writer = SummaryWriter(log_dir=os.path.join(output_dir, "tensorboard"))
+
+
     # Log some stuff (but only in process 0)
     if os.getenv("LOCAL_RANK", "0") == "0":
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -190,7 +197,6 @@ def main(_):
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
         normalize_obs=False,  # FLAGS.normalize_obs,
-        preload=FLAGS.preload_dataset,
         temperature=FLAGS.temperature,
     )
 
@@ -203,7 +209,6 @@ def main(_):
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=FLAGS.normalize_obs,
-            preload=FLAGS.preload_dataset,
             temperature=FLAGS.temperature,
         )
 
@@ -224,7 +229,7 @@ def main(_):
 
     # For saving files
     setting = f"{FLAGS.env_name}_{FLAGS.seed}"
-    clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.all_clip_ids])
+    clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.all_clip_snippets])
     start_steps = [int(s) for s in start_steps]
     end_steps = [int(s) for s in end_steps]
     eval_env = make_env(
@@ -254,9 +259,7 @@ def main(_):
             policy,
             eval_env,
         )
-        evaluations.append(eval_avg_reward)
-        np.save(os.path.join(output_dir, f"BCQ_{setting}"), evaluations)
-
+        tb_writer.add_scalar('eval_avg_reward', eval_avg_reward, training_iters)
         training_iters += FLAGS.eval_freq
         print(f"Training iterations: {training_iters}")
 

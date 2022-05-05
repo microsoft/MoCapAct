@@ -1,5 +1,8 @@
-dm_control
+dm_control>=1.0.2
 stable-baselines3
 pytorch-lightning
 ml_collections
 #git+https://github.com/DLR-RM/stable-baselines3.git@master
+tensorboardX==2.5
+h5py
+azure.storage.blob==12.9.0
