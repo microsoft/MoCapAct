@@ -41,7 +41,6 @@ flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, ever
 
 # Training hyperparameters
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
-flags.DEFINE_list("start_steps", [0], "Start step in clips")
 flags.DEFINE_integer("max_clip_steps", 256, "Maximum steps from start step")
 flags.DEFINE_integer("min_clip_steps", 1, "Minimum steps in a rollout")
 flags.DEFINE_string("env_name", "MocapTrackingGymEnv", "Environment from which the dataset was generated")
@@ -93,7 +92,7 @@ def make_env(
     always_init_at_clip_start=False,
     record_video=False,
     video_folder=None,
-    n_workers=2,
+    n_workers=4,
     termination_error_threshold=float('inf'),
     gamma=0.95,
     normalize_obs=True,
@@ -247,13 +246,16 @@ def main(_):
     # Initialize policy
     policy = BCQ(obs_dim, action_dim, max_action, device, FLAGS.discount, FLAGS.tau, FLAGS.lmbda, FLAGS.phi)
 
-    evaluations = []
     training_iters = 0
     replay_buffer = DataLoader(train_dataset, FLAGS.batch_size, shuffle=True)
     while training_iters < FLAGS.max_timesteps:
         print('Train step:', training_iters)
 
-        pol_vals = policy.train(replay_buffer, iterations=int(FLAGS.eval_freq), batch_size=FLAGS.batch_size)
+        KL_loss, vae_loss, critic_loss, actor_loss = policy.train(replay_buffer, iterations=int(FLAGS.eval_freq), batch_size=FLAGS.batch_size)
+        tb_writer.add_scalar('KL_loss', KL_loss.tolist(), training_iters)
+        tb_writer.add_scalar('vae_loss', vae_loss.tolist(), training_iters)
+        tb_writer.add_scalar('critic_loss', critic_loss.tolist(), training_iters)
+        tb_writer.add_scalar('actor_loss', actor_loss.tolist(), training_iters)
 
         eval_avg_reward = eval_policy(
             policy,
@@ -262,6 +264,9 @@ def main(_):
         tb_writer.add_scalar('eval_avg_reward', eval_avg_reward, training_iters)
         training_iters += FLAGS.eval_freq
         print(f"Training iterations: {training_iters}")
+
+    if FLAGS.use_tensorboard:
+        tb_writer.close()
 
 
 if __name__ == '__main__':

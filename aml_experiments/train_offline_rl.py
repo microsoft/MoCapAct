@@ -21,16 +21,21 @@ root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)
 output_ref = OutputFileDatasetConfig(destination=(ws.get_default_datastore(), 'locomotion'))
 input_ref = Dataset.File.from_files(Datastore.get(ws, "locomotion").path('humanoid_offline_rl')).as_download()
 
-installation_cmds = ('pip install -e . && ')
+# setup_cmds = ('pip install wrapt ratelimit azureml-mlflow && ' +
+#               'mkdir -p $(dirname $(dirname $(which python)))/lib/python3.7/site-packages && ' +
+#               'cp ./aml_experiments/tensorboard_patcher.py $(dirname $(dirname $(which python)))/lib/python3.7/site-packages/usercustomize.py && ' +
+#               'pip install -e . && ')
+
+setup_cmds = ('pip install -e . && ')
 
 script_run_config = ScriptRunConfig(
     source_directory=os.path.join(root_dir),
     command=[
-        installation_cmds + 'python', './humanoid_control/offline_rl/train_bcq.py',
+        setup_cmds + 'python', './humanoid_control/offline_rl/train_bcq.py',
         "--dataset_local_path", input_ref,
-        "--output_root", output_ref,
+        # "--output_root", 'output_ref',
+        "--output_root", './logs',
         "--train_dataset_files", "CMU_001_01-0-178.hdf5",
-        "--eval_freq", "1"
     ],
     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'))
