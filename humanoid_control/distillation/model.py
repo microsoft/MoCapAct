@@ -546,8 +546,9 @@ class HierarchicalRnnPolicy(BasePolicy):
             prior_embed_distribution = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), 1)
             kl = kl_divergence(next_embed_distribution, prior_embed_distribution).sum()
             total_kl += kl
-            total_embed_std += next_embed_distribution.stddev.mean()
-            total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - self.embedding_correlation*embed))
+            with torch.no_grad():
+                total_embed_std += next_embed_distribution.stddev.mean()
+                total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - self.embedding_correlation*embed))
 
             embed = next_embed
             all_embeds.append(embed)
@@ -555,12 +556,13 @@ class HierarchicalRnnPolicy(BasePolicy):
 
         act_distribution = self.action_decoder_forward(proprios, embeds[:, 1:])
         log_prob = act_distribution.log_prob(acts)
-        mse = F.mse_loss(act_distribution.mean, acts)
         weighted_log_prob = torch.einsum('ij,ij', weights, log_prob)
         loss = (-weighted_log_prob + self.embedding_kl_weight*total_kl) / (B*T)
 
-        embed_mean = torch.mean(embeds, dim=1).abs().mean()
-        embed_std = torch.std(embeds, dim=1).abs().mean()
+        with torch.no_grad():
+            mse = F.mse_loss(act_distribution.mean, acts)
+            embed_mean = torch.mean(embeds, dim=1).abs().mean()
+            embed_std = torch.std(embeds, dim=1).abs().mean()
 
         self.log("loss/mse", mse.item(), on_step=True, on_epoch=False, prog_bar=True, logger=True)
         self.log("loss/kl_div", total_kl.item()/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
