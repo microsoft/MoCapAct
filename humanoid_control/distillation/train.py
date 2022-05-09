@@ -36,13 +36,13 @@ flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, ever
 flags.DEFINE_float("learning_rate", 1e-4, "Learning rate")
 flags.DEFINE_float("max_grad_norm", float('inf'), "Clip gradient norm")
 flags.DEFINE_integer("n_workers", 8, "Number of workers for loading data")
-flags.DEFINE_bool("preload_dataset", False, "Whether to preload the dataset to RAM")
 flags.DEFINE_integer("seed", 0, "RNG seed")
 flags.DEFINE_integer("progress_bar_refresh_rate", 1, "How often to refresh progress bar")
 flags.DEFINE_bool("track_grad_norm", False, "Whether to log the gradient norm")
 flags.DEFINE_bool("clip_weighted", False, "Whether to use a weight defined solely by the clip or also by the state and action")
 flags.DEFINE_bool("advantage_weights", True, "Whether to use AWR or RWR")
 flags.DEFINE_float("temperature", None, "Weighting temperature")
+flags.DEFINE_bool("keep_hdf5s_open", False, "Whether to keep all HDF5s open (will cause memory leaks!)")
 
 # Model hyperparameters
 config_file = "humanoid_control/distillation/config.py"
@@ -136,7 +136,8 @@ def main(_):
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
         concat_observables=False,
-        metrics_path=dataset_metrics_path
+        metrics_path=dataset_metrics_path,
+        keep_hdf5s_open=FLAGS.keep_hdf5s_open
     )
 
     if FLAGS.val_dataset_paths is not None:
@@ -151,7 +152,8 @@ def main(_):
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
             concat_observables=False,
-            metrics_path=dataset_metrics_path
+            metrics_path=dataset_metrics_path,
+            keep_hdf5s_open=FLAGS.keep_hdf5s_open
         )
 
     if FLAGS.normalize_obs:

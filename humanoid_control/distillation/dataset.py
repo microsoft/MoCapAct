@@ -32,7 +32,8 @@ class ExpertDataset(Dataset):
         advantage_weights: bool = True,
         temperature: Optional[float] = None,
         max_weight: float = float('inf'),
-        metrics_path: Optional[Text] = None
+        metrics_path: Optional[Text] = None,
+        keep_hdf5s_open: bool = False
     ):
         """
         h5py_fnames: List of paths to HDF5 files to load.
@@ -50,6 +51,10 @@ class ExpertDataset(Dataset):
         """
         self._h5py_fnames = h5py_fnames
         self._observables = observables
+
+        self._keep_hdf5s_open = keep_hdf5s_open
+        if self._keep_hdf5s_open:
+            self._dsets = [h5py.File(fname, 'r') for fname in self._h5py_fnames]
 
         # Grab all clip snippet information
         # self._clip_snippets separates the snippets by file
@@ -314,59 +319,67 @@ class ExpertDataset(Dataset):
         TODO
         """
         dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
-        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx)-1
+
+        if self._keep_hdf5s_open:
+            return self._getitem(self._dsets[dset_idx], idx)
 
         with h5py.File(self._h5py_fnames[dset_idx], 'r') as dset:
-            obs_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
-            act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
-            val_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/values"]
-            adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
+            return self._getitem(dset, idx)
 
+    def _getitem(self, dset, idx):
+        dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
+        clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx)-1
+
+        obs_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
+        act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
+        val_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/values"]
+        adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
+
+        if self.is_sequential:
+            start_idx = idx - self._logical_indices[dset_idx][clip_idx]
+            end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
+            all_obs = obs_dset[start_idx:end_idx]
+            act = act_dset[start_idx:end_idx]
+        else:
+            rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
+            all_obs = obs_dset[rel_idx]
+            act = act_dset[rel_idx]
+
+        if self._normalize_obs:
+            all_obs = (all_obs - self.obs_mean) / self.obs_std
+        if self._normalize_act:
+            act = (act - self.act_mean) / self.act_std
+
+        # Extract observation
+        if isinstance(self._observables, dict):
+            obs = {
+                k: self._extract_observations(all_obs, observable_keys)
+                for k, observable_keys in self._observables.items()
+            }
+            if self._concat_observables:
+                obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in obs.items()}
+        else:
+            obs = self._extract_observations(all_obs, self._observables)
+            if self._concat_observables:
+                obs = np.concatenate(list(obs.values()), axis=-1)
+
+        if self._temperature is None:
+            weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
+        elif self._clip_weighted:
+            key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
+            ret = self._snippet_returns[dset_idx][key]
+            weight = np.exp((ret - self._return_offset) / self._temperature)
             if self.is_sequential:
-                start_idx = idx - self._logical_indices[dset_idx][clip_idx]
-                end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
-                all_obs = obs_dset[start_idx:end_idx]
-                act = act_dset[start_idx:end_idx]
+                weight = weight * np.ones(end_idx-start_idx)
+        else: # state-action weight
+            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
+            if self._advantage_weights:
+                energy = adv - self._advantage_offset
             else:
-                rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
-                all_obs = obs_dset[rel_idx]
-                act = act_dset[rel_idx]
+                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
+                energy = val + adv - self._q_value_offset
+            weight = np.exp(energy / self._temperature)
 
-            if self._normalize_obs:
-                all_obs = (all_obs - self.obs_mean) / self.obs_std
-            if self._normalize_act:
-                act = (act - self.act_mean) / self.act_std
-
-            # Extract observation
-            if isinstance(self._observables, dict):
-                obs = {
-                    k: self._extract_observations(all_obs, observable_keys)
-                    for k, observable_keys in self._observables.items()
-                }
-                if self._concat_observables:
-                    obs = {k: np.concatenate(list(v.values()), axis=-1) for k, v in obs.items()}
-            else:
-                obs = self._extract_observations(all_obs, self._observables)
-                if self._concat_observables:
-                    obs = np.concatenate(list(obs.values()), axis=-1)
-
-            if self._temperature is None:
-                weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
-            elif self._clip_weighted:
-                key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
-                ret = self._snippet_returns[dset_idx][key]
-                weight = np.exp((ret - self._return_offset) / self._temperature)
-                if self.is_sequential:
-                    weight = weight * np.ones(end_idx-start_idx)
-            else: # state-action weight
-                adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
-                if self._advantage_weights:
-                    energy = adv - self._advantage_offset
-                else:
-                    val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
-                    energy = val + adv - self._q_value_offset
-                weight = np.exp(energy / self._temperature)
-
-            weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
+        weight = np.array(np.minimum(weight, self._max_weight), dtype=np.float32)
 
         return obs, act, weight
