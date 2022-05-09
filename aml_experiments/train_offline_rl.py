@@ -18,8 +18,8 @@ ws = Workspace(subscription_id="c8b7f913-60fb-4759-a310-fc5630e56f99",
                auth=interactive_auth)
 
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)
-output_ref = OutputFileDatasetConfig(destination=(ws.get_default_datastore(), 'locomotion'))
 input_ref = Dataset.File.from_files(Datastore.get(ws, "locomotion").path('humanoid_offline_rl')).as_download()
+output_ref = OutputFileDatasetConfig(destination=(ws.get_default_datastore(), 'locomotion'))
 
 # setup_cmds = ('pip install wrapt ratelimit azureml-mlflow && ' +
 #               'mkdir -p $(dirname $(dirname $(which python)))/lib/python3.7/site-packages && ' +
