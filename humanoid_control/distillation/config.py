@@ -59,6 +59,14 @@ def get_config(config_string):
                 observables=observables.HIERARCHICAL_OBSERVABLES
                 ))
             }),
+        'mcp': ConfigDict({
+            'constructor': prepend_model('McpPolicy'),
+            'config': ConfigDict(dict(
+                seq_steps=30,
+                embedding_kl_weight=0.1,
+                observables=observables.HIERARCHICAL_OBSERVABLES
+            ))
+        }),
         'gpt': ConfigDict({
             'constructor': prepend_model('GPTPolicy'),
             'config': ConfigDict(dict(
