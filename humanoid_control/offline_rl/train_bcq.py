@@ -228,7 +228,7 @@ def main(_):
 
     # For saving files
     setting = f"{FLAGS.env_name}_{FLAGS.seed}"
-    clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.all_clip_snippets])
+    clip_ids, start_steps, end_steps = zip(*[clip_id.split('-') for clip_id in train_dataset.clip_snippets_flat])
     start_steps = [int(s) for s in start_steps]
     end_steps = [int(s) for s in end_steps]
     eval_env = make_env(

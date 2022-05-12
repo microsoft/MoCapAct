@@ -204,7 +204,7 @@ class D4RLDataset(ExpertDataset):
 
             terminal, timeout = False, False
             if obs_dset.shape[0] == rel_idx:
-                terminal = self._dsets[dset_idx][f"{self._all_clip_snippets[clip_idx]}/early_termination"][clip_idx]
+                terminal = self._dsets[dset_idx][f"{self._clip_snippets_flat[clip_idx]}/early_termination"][clip_idx]
                 timeout = not terminal
 
             return obs, act, rew, next_obs, terminal, timeout, weight

@@ -130,9 +130,9 @@ class BCQ(object):
             state, action, reward, next_state, terminal, timeout, _ = next(iter(replay_buffer))
             state = torch.FloatTensor(state).to(self.device)
             action = torch.FloatTensor(action).to(self.device)
-            reward = torch.FloatTensor(reward).to(self.device)
+            reward = torch.FloatTensor(reward).reshape(-1, 1).to(self.device)
             next_state = torch.FloatTensor(next_state).to(self.device)
-            not_done = torch.logical_not(torch.logical_or(terminal, timeout)).to(self.device)
+            not_done = torch.logical_not(torch.logical_or(terminal, timeout)).reshape(-1, 1).to(self.device)
 
             # Variational Auto-Encoder Training
             recon, mean, std = self.vae(state, action)
