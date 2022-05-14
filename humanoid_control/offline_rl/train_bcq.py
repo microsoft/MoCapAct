@@ -22,6 +22,8 @@ from humanoid_control.envs import wrappers
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
 from humanoid_control.offline_rl.continuous_bcq.BCQ import BCQ
 
+from aml_experiments import logger
+
 
 FLAGS = flags.FLAGS
 
@@ -257,11 +259,19 @@ def main(_):
         tb_writer.add_scalar('critic_loss', critic_loss.tolist(), training_iters)
         tb_writer.add_scalar('actor_loss', actor_loss.tolist(), training_iters)
 
+        logger.log_metric('KL_loss', KL_loss.tolist())
+        logger.log_metric('vae_loss', vae_loss.tolist())
+        logger.log_metric('critic_loss', critic_loss.tolist())
+        logger.log_metric('actor_loss', actor_loss.tolist())
+
         eval_avg_reward = eval_policy(
             policy,
             eval_env,
         )
+
         tb_writer.add_scalar('eval_avg_reward', eval_avg_reward, training_iters)
+        logger.log_metric('eval_avg_reward', eval_avg_reward)
+
         training_iters += FLAGS.eval_freq
         print(f"Training iterations: {training_iters}")
 

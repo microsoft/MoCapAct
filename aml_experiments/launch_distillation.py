@@ -19,25 +19,14 @@ ws = Workspace(subscription_id="c8b7f913-60fb-4759-a310-fc5630e56f99",
 
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)
 
-# setup_cmds = ('pip install wrapt ratelimit azureml-mlflow && ' +
-#               'mkdir -p $(dirname $(dirname $(which python)))/lib/python3.7/site-packages && ' +
-#               'cp ./aml_experiments/tensorboard_patcher.py $(dirname $(dirname $(which python)))/lib/python3.7/site-packages/usercustomize.py && ' +
-#               'pip install -e . && ')
-
 setup_cmds = ('pip install -e . && ')
 
 script_run_config = ScriptRunConfig(
     source_directory=os.path.join(root_dir),
     command=[
         setup_cmds + 'python', './humanoid_control/distillation/train.py',
-        "--train_dataset_paths", Dataset.File.from_files([
-            Datastore.get(ws, "locomotion").path('humanoid_control/rollouts/few/CMU_108_20.hdf5'),
-            Datastore.get(ws, "locomotion").path('humanoid_control/rollouts/few/CMU_035_29.hdf5'),
-        ]).as_download(),
-        "--val_dataset_paths", Dataset.File.from_files([
-            Datastore.get(ws, "locomotion").path('humanoid_control/rollouts/few/CMU_078_32.hdf5'),
-            Datastore.get(ws, "locomotion").path('humanoid_control/rollouts/few/CMU_016_58.hdf5'),
-        ]).as_download(),
+        "--train_dataset_paths", Dataset.File.from_files((Datastore.get(ws, "humcontrolds"), 'humanoid_control/rollouts/few/CMU_108_20.hdf5')).as_download(), Dataset.File.from_files((Datastore.get(ws, "humcontrolds"), 'humanoid_control/rollouts/few/CMU_035_29.hdf5')).as_download(),
+        "--val_dataset_paths", Dataset.File.from_files((Datastore.get(ws, "humcontrolds"), 'humanoid_control/rollouts/few/CMU_078_32.hdf5')).as_download(), Dataset.File.from_files((Datastore.get(ws, "humcontrolds"), 'humanoid_control/rollouts/few/CMU_016_58.hdf5')).as_download(),
         "--n_workers", "24",
         "--output_root", "./logs",
         "--learning_rate", "0.0005",
@@ -54,7 +43,7 @@ script_run_config = ScriptRunConfig(
         "--eval.n_workers", "24",
         "--model.config.embed_size", "60",
         "--eval.n_episodes", "1000",
-        "--dataset_metrics_path", Dataset.File.from_files(Datastore.get(ws, "locomotion").path('humanoid_control/distillation/few/dataset_metrics.npz')).as_download(),
+        "--dataset_metrics_path", Dataset.File.from_files(Datastore.get(ws, "humcontrolds").path('humanoid_control/distillation/few/dataset_metrics.npz')).as_download(),
     ],
     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'))
