@@ -209,7 +209,7 @@ def main(_):
         always_init_at_clip_start = (eval_mode.endswith("start"))
         prefix = (
             ("train_" if is_train_dataset else "val_")
-            + ("start" if always_init_at_clip_start else "random")
+            + ("start" if always_init_at_clip_start else "rsi")
         )
         if not is_train_dataset and FLAGS.val_dataset_paths is None:
             continue
