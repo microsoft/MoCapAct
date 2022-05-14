@@ -62,7 +62,7 @@ eval_config.termination_error_threshold = 0.3
 eval_config.n_workers = 8
 eval_config.seed = 0
 eval_config.serial = False
-flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_start", "val_random"], "What dataset and initialization to do evaluation on")
+flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_rsi", "val_start", "val_rsi"], "What dataset and initialization to do evaluation on")
 config_flags.DEFINE_config_dict("eval", eval_config)
 
 flags.mark_flag_as_required("output_root")
@@ -207,10 +207,7 @@ def main(_):
     for eval_mode in FLAGS.eval_mode: # Policy evaluation callbacks
         is_train_dataset = (eval_mode.startswith("train"))
         always_init_at_clip_start = (eval_mode.endswith("start"))
-        prefix = (
-            ("train_" if is_train_dataset else "val_")
-            + ("start" if always_init_at_clip_start else "rsi")
-        )
+        prefix = eval_mode
         if not is_train_dataset and FLAGS.val_dataset_paths is None:
             continue
         if os.getenv("LOCAL_RANK", "0") == "0":
