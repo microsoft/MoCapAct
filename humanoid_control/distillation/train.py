@@ -22,8 +22,9 @@ FLAGS = flags.FLAGS
 
 # Path flags
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
-flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
-flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
+flags.DEFINE_string("dataset_root", None, "Root to dataset files")
+flags.DEFINE_list("train_clip_ids", None, "Names of training set clip IDs")
+flags.DEFINE_list("val_clip_ids", None, "Names of training set clip IDs")
 flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning's loop over the validation set")
 flags.DEFINE_integer("validation_freq", int(1e4), "How often (in iterations) to do validation loop")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
@@ -65,10 +66,17 @@ flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_random", "val_st
 config_flags.DEFINE_config_dict("eval", eval_config)
 
 flags.mark_flag_as_required("output_root")
-flags.mark_flag_as_required("train_dataset_paths")
+flags.mark_flag_as_required("dataset_root")
+flags.mark_flag_as_required("train_clip_ids")
 
 def main(_):
     output_dir = osp.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+
+    train_dataset_paths = [osp.join(FLAGS.dataset_root, clip_id + '.hdf5') for clip_id in FLAGS.train_clip_ids]
+    if FLAGS.val_clip_ids is None:
+        val_dataset_paths = None
+    else:
+        val_dataset_paths = [osp.join(FLAGS.dataset_root, clip_id + '.hdf5') for clip_id in FLAGS.val_clip_ids]
 
     # Log some stuff (but only in process 0)
     if os.getenv("LOCAL_RANK", "0") == "0":
@@ -83,11 +91,11 @@ def main(_):
 
     # If desired, randomize order of dataset paths
     if FLAGS.randomly_load_hdf5:
-        print(FLAGS.train_dataset_paths)
-        random.shuffle(FLAGS.train_dataset_paths)
-        print(FLAGS.train_dataset_paths)
-        if FLAGS.val_dataset_paths is not None:
-            random.shuffle(FLAGS.val_dataset_paths)
+        print(train_dataset_paths)
+        random.shuffle(train_dataset_paths)
+        print(train_dataset_paths)
+        if val_dataset_paths is not None:
+            random.shuffle(val_dataset_paths)
 
     # Make supervision dataset
     if hasattr(FLAGS.model.config, 'seq_steps'):
@@ -98,7 +106,7 @@ def main(_):
         seq_steps = 1
 
     train_dataset = dataset.ExpertDataset(
-        FLAGS.train_dataset_paths,
+        train_dataset_paths,
         observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
         FLAGS.clip_ids,
         min_seq_steps=seq_steps,
@@ -111,9 +119,9 @@ def main(_):
         concat_observables=False
     )
 
-    if FLAGS.val_dataset_paths is not None:
+    if val_dataset_paths is not None:
         val_dataset = dataset.ExpertDataset(
-            FLAGS.val_dataset_paths,
+            val_dataset_paths,
             observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
             FLAGS.clip_ids,
             min_seq_steps=seq_steps,
@@ -150,7 +158,7 @@ def main(_):
 
     train_loader = DataLoader(train_dataset, shuffle=True, pin_memory=True,
                               batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
-    if FLAGS.val_dataset_paths is not None and FLAGS.do_validation_loop:
+    if val_dataset_paths is not None and FLAGS.do_validation_loop:
         val_loader = DataLoader(val_dataset, batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
     else:
         val_loader = None
@@ -174,7 +182,7 @@ def main(_):
             ("train_" if is_train_dataset else "val_")
             + ("start" if always_init_at_clip_start else "random")
         )
-        if not is_train_dataset and FLAGS.val_dataset_paths is None:
+        if not is_train_dataset and val_dataset_paths is None:
             continue
         if os.getenv("LOCAL_RANK", "0") == "0":
             Path(osp.join(output_dir, 'eval', prefix)).mkdir(parents=True, exist_ok=True)
