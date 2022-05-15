@@ -4,7 +4,8 @@ from typing import Any, Callable, Dict, Optional, Type, Union
 import gym
 
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv, VecNormalize, VecVideoRecorder
+
 
 def make_vec_env(
     env_id: Type[gym.Env],
@@ -16,7 +17,7 @@ def make_vec_env(
     env_kwargs: Optional[Dict[str, Any]] = None,
     vec_env_cls: Optional[Type[Union[DummyVecEnv, SubprocVecEnv]]] = None,
     vec_env_kwargs: Optional[Dict[str, Any]] = None,
-    vec_monitor_cls = VecMonitor,
+    vec_monitor_cls: Callable[..., VecMonitor] = VecMonitor,
     monitor_kwargs: Optional[Dict[str, Any]] = None,
     wrapper_kwargs: Optional[Dict[str, Any]] = None,
 ) -> VecEnv:

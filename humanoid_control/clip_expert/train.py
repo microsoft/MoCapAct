@@ -3,7 +3,6 @@ import os.path as osp
 import json
 from pathlib import Path
 import glob
-from datetime import datetime
 import pickle
 import zipfile
 import numpy as np
@@ -21,9 +20,9 @@ from stable_baselines3.common.utils import get_device
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
 from humanoid_control import utils
-from humanoid_control.sb3 import env_util
+from humanoid_control.envs import env_util
+from humanoid_control.envs import tracking
 from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import tracking
 from humanoid_control.sb3 import utils as sb3_utils
 from humanoid_control.sb3 import wrappers
 from humanoid_control.clip_expert import callbacks
@@ -51,9 +50,9 @@ flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
 flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
 flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
 lr_config = ml_collections.ConfigDict()
-lr_config.start_val = 1e-4 # Initial step size
-lr_config.decay_half_life = 0.2 # Half-life for decay rate of learning rate
-lr_config.min_val = 1e-6 # Minimum step size
+lr_config.start_val = 1e-4  # Initial step size
+lr_config.decay_half_life = 0.2  # Half-life for decay rate of learning rate
+lr_config.min_val = 1e-6  # Minimum step size
 config_flags.DEFINE_config_dict("learning_rate", lr_config)
 
 # Network hyperparameters
@@ -63,17 +62,17 @@ flags.DEFINE_enum("activation_fn", "torch.nn.Tanh", ["torch.nn.ReLU", "torch.nn.
 
 # Evaluation hyperparameters
 eval_config = ml_collections.ConfigDict()
-eval_config.seed = 0 # RNG seed for evaluation
-eval_config.min_steps = 10 # Minimum steps in an evaluation episodes
-eval_config.freq = int(1e5) # After how many total environment steps to evaluate policy
-eval_config.n_random_episodes = 32 # Number of episodes to evaluate the policy from random initial states
-eval_config.random_eval_act_noise = 0.1 # Action noise to apply for random initial states
-eval_config.n_start_episodes = 32 # Number of episodes to evaluate the policy from the start of snippet
-eval_config.start_eval_act_noise = 0.1 # Action noise to apply for start of snippet
+eval_config.seed = 0                                    # RNG seed for evaluation
+eval_config.min_steps = 10                              # Minimum steps in an evaluation episodes
+eval_config.freq = int(1e5)                             # After how many total environment steps to evaluate policy
+eval_config.n_random_episodes = 32                      # Number of episodes to evaluate the policy from random initial states
+eval_config.random_eval_act_noise = 0.1                 # Action noise to apply for random initial states
+eval_config.n_start_episodes = 32                       # Number of episodes to evaluate the policy from the start of snippet
+eval_config.start_eval_act_noise = 0.1                  # Action noise to apply for start of snippet
 eval_config.early_stop = ml_collections.ConfigDict()
-eval_config.early_stop.ep_length_threshold = 1. # Episode length threshold for early stopping
-eval_config.early_stop.min_reward_delta = float('inf') # Minimum change in normalized reward to qualify as improvement
-eval_config.early_stop.patience = 10 # Number of queries with no improvement after which training is stopped
+eval_config.early_stop.ep_length_threshold = 1.         # Episode length threshold for early stopping
+eval_config.early_stop.min_reward_delta = 0.            # Minimum change in normalized reward to qualify as improvement
+eval_config.early_stop.patience = 10                    # Number of queries with no improvement after which training is stopped
 config_flags.DEFINE_config_dict("eval", eval_config)
 
 # Misc. hyperparameters
@@ -92,7 +91,7 @@ def find_finished_jobs(job_root):
     eval_paths = glob.glob(osp.join(job_root, '**/eval_random/evaluations.npz'), recursive=True)
     for path in eval_paths:
         data = np.load(path)
-        if len(data['timesteps']) == 150: # hard-coded number, but only for these runs
+        if len(data['timesteps']) == 150:  # hard-coded number, but only for these runs
             Path(osp.join(osp.dirname(osp.dirname(path)), 'FINISHED')).touch()
             Path(osp.join(job_root, 'SUCCEEDED')).touch()
             continue
@@ -123,11 +122,10 @@ def is_still_running(root):
             logged_time = f.read()
         last_time = datetime.fromtimestamp(float(logged_time))
         print(f"{osp.join(root, 'last_time.txt')}: {last_time}")
-        return (now-last_time).total_seconds() <= 60*60
+        return (now - last_time).total_seconds() <= 60 * 60
 
     # Otherwise, we assume no other running jobs
     return False
-
 
 def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
              act_noise=0., always_init_at_clip_start=False, video_folder=None,
@@ -167,15 +165,16 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
                        norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
     return env
 
-#def get_warm_start_path(evaluation_paths):
-#    save_times = [osp.getmtime(path) for path in evaluation_paths]
-#    sorted_indices = np.argsort(save_times)[::-1]
-#    for i in sorted_indices:
-#        path = evaluation_paths[sorted_indices[i]]
-#        model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
-#        if osp.exists(osp.join(model_path, 'best_model.zip')):
-#            return model_path
-#    return None
+# def get_warm_start_path(evaluation_paths):
+#     save_times = [osp.getmtime(path) for path in evaluation_paths]
+#     sorted_indices = np.argsort(save_times)[::-1]
+#     for i in sorted_indices:
+#         path = evaluation_paths[sorted_indices[i]]
+#         model_path = osp.abspath(osp.join(path, osp.pardir, 'model'))
+#         if osp.exists(osp.join(model_path, 'best_model.zip')):
+#             return model_path
+#     return None
+
 def get_warm_start_path(evaluation_paths):
     best_rew, best_path = float('-inf'), None
     for path in evaluation_paths:
@@ -194,7 +193,7 @@ def main(_):
     os.environ['CMU_MOCAP_DIR'] = FLAGS.data_dir
 
     clip_length = utils.get_clip_length(FLAGS.clip_id)
-    snippet_length = min(clip_length-FLAGS.start_step, FLAGS.max_steps)
+    snippet_length = min(clip_length - FLAGS.start_step, FLAGS.max_steps)
     end_step = FLAGS.start_step + snippet_length
 
     # Log directory
@@ -238,10 +237,16 @@ def main(_):
         logger = configure(log_dir, format_strings)
 
     # Rollout environment
-    env = make_env(seed=FLAGS.seed, start_step=FLAGS.start_step, end_step=end_step,
-                   min_steps=FLAGS.min_steps, training=True, act_noise=0.,
-                   always_init_at_clip_start=False,
-                   termination_error_threshold=FLAGS.termination_error_threshold)
+    env = make_env(
+        seed=FLAGS.seed,
+        start_step=FLAGS.start_step,
+        end_step=end_step,
+        min_steps=FLAGS.min_steps,
+        training=True,
+        act_noise=0.,
+        always_init_at_clip_start=False,
+        termination_error_threshold=FLAGS.termination_error_threshold
+    )
 
     # Evaluation environment where start point is selected at random
     random_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
@@ -267,7 +272,7 @@ def main(_):
         log_path=random_eval_path,
         eval_freq=eval_freq,
         callback_on_new_best=callback_on_new_best,
-        early_stopping_callback=early_stopping_callback,
+        callback_after_eval=early_stopping_callback,
         n_eval_episodes=FLAGS.eval.n_random_episodes,
         deterministic=True,
         render=False,
@@ -302,11 +307,11 @@ def main(_):
     decay = np.log(2) / FLAGS.learning_rate.decay_half_life
     lr_schedule = sb3_utils.get_exponential_fn(FLAGS.learning_rate.start_val, decay, FLAGS.learning_rate.min_val)
 
-    # Load a prior policy, if available
-    #experiment_root = osp.abspath(osp.join(log_dir, osp.pardir))
-    #evaluation_paths = glob.glob(osp.join(experiment_root, '**/eval_random/evaluations.npz'), recursive=True)
+    # # Load a prior policy, if available
+    # experiment_root = osp.abspath(osp.join(log_dir, osp.pardir))
+    # evaluation_paths = glob.glob(osp.join(experiment_root, '**/eval_random/evaluations.npz'), recursive=True)
     warm_start_root = FLAGS.warm_start_root or osp.abspath(osp.join(log_dir, osp.pardir))
-    warm_start_root = osp.join(FLAGS.warm_start_root, f"{FLAGS.clip_id}-{FLAGS.start_step}/{FLAGS.seed}")
+    warm_start_root = osp.join(warm_start_root, f"{FLAGS.clip_id}-{FLAGS.start_step}-{end_step}/{FLAGS.seed}")
     evaluation_paths = glob.glob(osp.join(warm_start_root, '**/eval_random/evaluations.npz'), recursive=True)
     warm_start_path = get_warm_start_path(evaluation_paths)
     if warm_start_path is None:
@@ -319,7 +324,7 @@ def main(_):
             features_extractor_class=features_extractor.CmuHumanoidFeaturesExtractor,
             features_extractor_kwargs=dict(observable_keys=observables.TIME_INDEX_OBSERVABLES)
         )
-        model = PPO("MultiInputPolicy", env, n_steps=int(FLAGS.n_steps/FLAGS.n_workers),
+        model = PPO("MultiInputPolicy", env, n_steps=int(FLAGS.n_steps / FLAGS.n_workers),
                     gamma=FLAGS.gamma, clip_range=FLAGS.clip_range,
                     batch_size=FLAGS.batch_size, n_epochs=FLAGS.n_epochs,
                     gae_lambda=FLAGS.gae_lambda, max_grad_norm=FLAGS.max_grad_norm,
@@ -346,7 +351,7 @@ def main(_):
             device=get_device(FLAGS.device),
             custom_objects=dict(
                 policy_kwargs=policy_kwargs,
-                n_steps=int(FLAGS.n_steps/FLAGS.n_workers),
+                n_steps=int(FLAGS.n_steps / FLAGS.n_workers),
                 n_envs=FLAGS.n_workers,
                 clip_range=FLAGS.clip_range,
                 learning_rate=lr_schedule
@@ -359,7 +364,7 @@ def main(_):
 
     if FLAGS.do_logging:
         model.set_logger(logger)
-    model.policy.log_std.requires_grad = False # keep policy covariance fixed throughout training
+    model.policy.log_std.requires_grad = False  # keep policy covariance fixed throughout training
 
     # Train the model
     callback = [

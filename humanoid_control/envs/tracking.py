@@ -55,7 +55,7 @@ class MocapTrackingGymEnv(core.Env):
         # create observation space
         obs_spaces = dict()
         for k, v in self._env.observation_spec().items():
-            if v.dtype == np.int64: # clip ID
+            if v.dtype == np.int64:  # clip ID
                 obs_spaces[k] = spaces.Discrete(len(dataset.ids))
             elif np.prod(v.shape) > 0:
                 obs_spaces[k] = spaces.Box(-np.infty, np.infty, shape=(np.prod(v.shape),), dtype=np.float32)
@@ -79,10 +79,10 @@ class MocapTrackingGymEnv(core.Env):
         return {k: obs[k].ravel() for k in self.observation_space.spaces}
 
     def _create_env(self, ref_steps, dataset, act_noise, task_kwargs, environment_kwargs):
-        walker = cmu_humanoid.CMUHumanoidPositionControlledV2020
+        walker_type = cmu_humanoid.CMUHumanoidPositionControlledV2020
         arena = floors.Floor()
         task = tracking.MultiClipMocapTracking(
-            walker,
+            walker_type,
             arena,
             cmu_mocap_data.get_path_for_cmu(version='2020'),
             ref_steps,
@@ -93,9 +93,9 @@ class MocapTrackingGymEnv(core.Env):
             task=task,
             **environment_kwargs
         )
-        task.random = env.random_state # for action noise
+        task.random = env.random_state  # for action noise
         if act_noise > 0:
-            env = action_noise.Wrapper(env, scale=act_noise/2)
+            env = action_noise.Wrapper(env, scale=act_noise / 2)
 
         return env
 
@@ -119,10 +119,10 @@ class MocapTrackingGymEnv(core.Env):
         done = time_step.last()
         obs = self._get_obs(time_step)
         info = dict(internal_state=self._env.physics.get_state().copy(),
-                     time_in_clip=time_step.observation['walker/time_in_clip'].item(),
-                     start_time_in_clip=self._start_time_in_clip,
-                     last_time_in_clip=self._last_time_in_clip,
-                     discount=time_step.discount)
+                    time_in_clip=time_step.observation['walker/time_in_clip'].item(),
+                    start_time_in_clip=self._start_time_in_clip,
+                    last_time_in_clip=self._last_time_in_clip,
+                    discount=time_step.discount)
         return obs, reward, done, info
 
     def reset(self):

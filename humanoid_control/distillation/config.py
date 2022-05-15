@@ -51,7 +51,7 @@ def get_config(config_string):
                 layer_norm=True,
                 embedding_kl_weight=0.1,
                 embedding_correlation=0.95,
-                predict_delta_mean=False,
+                predict_delta_embed=False,
                 seq_steps=30,
                 truncated_bptt_steps=30,
                 activation_fn='torch.nn.Tanh',
@@ -59,6 +59,14 @@ def get_config(config_string):
                 observables=observables.HIERARCHICAL_OBSERVABLES
                 ))
             }),
+        'mcp': ConfigDict({
+            'constructor': prepend_model('McpPolicy'),
+            'config': ConfigDict(dict(
+                seq_steps=30,
+                embedding_kl_weight=0.1,
+                observables=observables.HIERARCHICAL_OBSERVABLES
+            ))
+        }),
         'gpt': ConfigDict({
             'constructor': prepend_model('GPTPolicy'),
             'config': ConfigDict(dict(

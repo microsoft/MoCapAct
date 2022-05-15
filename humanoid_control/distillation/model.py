@@ -1,14 +1,11 @@
 from abc import abstractmethod
 import json
-from pyexpat import features
 from typing import Any, Dict, Optional, Sequence, Text, Tuple, Type, Union
 import gym
 import math
 import numpy as np
-from numpy.lib.arraysetops import isin
 from stable_baselines3.common import policies
 import torch
-from torch.functional import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
@@ -21,6 +18,7 @@ from stable_baselines3.common import torch_layers
 
 from humanoid_control import utils
 from humanoid_control.sb3 import features_extractor
+from humanoid_control.sb3.torch_layers import create_mlp
 
 def count_parameters(parameters):
     return sum(p.numel() for p in parameters)
@@ -71,25 +69,25 @@ class BasePolicy(policies.BasePolicy, pl.LightningModule):
         self.features_dim = self.features_extractor.features_dim
         self.activation_fn = utils.str_to_callable(activation_fn)
 
-    #def _get_constructor_parameters(self) -> Dict[str, Any]:
-    #    data = super()._get_constructor_parameters()
-    #    del data['normalize_images']
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+        data = super()._get_constructor_parameters()
+        del data['normalize_images']
 
-    #    data.update(
-    #        dict(
-    #            observables=self.observables,
-    #            ref_steps=self.ref_steps,
-    #            learning_rate=self.learning_rate,
-    #            activation_fn=self.activation_fn,
-    #            squash_output=self.squash_output,
-    #            std_dev=self.std_dev,
-    #            features_extractor_class=self.features_extractor_class,
-    #            features_extractor_kwargs=self.features_extractor_kwargs,
-    #            optimizer_class=self.optimizer_class,
-    #            optimizer_kwargs=self.optimizer_kwargs
-    #        )
-    #    )
-    #    return data
+        data.update(
+            dict(
+                observables=self.observables,
+                ref_steps=self.ref_steps,
+                learning_rate=self.learning_rate,
+                activation_fn=self.activation_fn,
+                squash_output=self.squash_output,
+                std_dev=self.std_dev,
+                features_extractor_class=self.features_extractor_class,
+                features_extractor_kwargs=self.features_extractor_kwargs,
+                optimizer_class=self.optimizer_class,
+                optimizer_kwargs=self.optimizer_kwargs
+            )
+        )
+        return data
 
     ###########################
     # PyTorch Lightning methods
@@ -220,16 +218,16 @@ class MlpPolicy(BasePolicy):
             squash_output=self.squash_output
         ))
 
-    #def _get_constructor_parameters(self) -> Dict[str, Any]:
-    #    data = super()._get_constructor_parameters()
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+        data = super()._get_constructor_parameters()
 
-    #    data.update(
-    #        dict(
-    #            n_layers=self.n_layers,
-    #            layer_size=self.layer_size
-    #        )
-    #    )
-    #    return data
+        data.update(
+            dict(
+                n_layers=self.n_layers,
+                layer_size=self.layer_size
+            )
+        )
+        return data
 
     def initial_state(self, batch_size=1, deterministic=False):
         return np.zeros(batch_size, dtype=np.float32)
@@ -309,20 +307,20 @@ class HierarchicalMlpPolicy(BasePolicy):
             squash_output=self.squash_output
         ))
 
-    #def _get_constructor_parameters(self) -> Dict[str, Any]:
-    #    data = super()._get_constructor_parameters()
+    def _get_constructor_parameters(self) -> Dict[str, Any]:
+        data = super()._get_constructor_parameters()
 
-    #    data.update(
-    #        dict(
-    #            embed_size=self.embed_size,
-    #            encoder_n_layers=self.encoder_n_layers,
-    #            encoder_layer_size=self.encoder_layer_size,
-    #            decoder_n_layers=self.decoder_n_layers,
-    #            decoder_layer_size=self.decoder_layer_size,
-    #            kl_weight=self.kl_weight
-    #        )
-    #    )
-    #    return data
+        data.update(
+            dict(
+                embed_size=self.embed_size,
+                encoder_n_layers=self.encoder_n_layers,
+                encoder_layer_size=self.encoder_layer_size,
+                decoder_n_layers=self.decoder_n_layers,
+                decoder_layer_size=self.decoder_layer_size,
+                kl_weight=self.kl_weight
+            )
+        )
+        return data
 
     def initial_state(self, batch_size=1, deterministic=False):
         return np.zeros(batch_size, dtype=np.float32)
@@ -371,6 +369,48 @@ class HierarchicalMlpPolicy(BasePolicy):
         act_gaussian, *_ = self.forward(features, deterministic=deterministic)
         return act_gaussian.mean, state
 
+#######################################
+# Policies that use recurrent encoder
+#######################################
+
+class RecurrentEncoder(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        embed_dim: int,
+        n_layers: int,
+        layer_size: int,
+        activation_fn: Type[nn.Module],
+        layer_norm: bool = False,
+        predict_delta_embed: bool = False,
+        embedding_correlation: float = 0.95,
+        min_std: float = 1e-5
+    ):
+        super().__init__()
+        layers = create_mlp(
+            input_dim + embed_dim,
+            2*embed_dim,
+            net_arch=n_layers*[layer_size],
+            activation_fn=activation_fn,
+            layer_norm=layer_norm
+        )
+        self.reference_encoder = nn.Sequential(*layers)
+        self.embed_dim = embed_dim
+        self.predict_delta_embed = predict_delta_embed
+        self.embedding_correlation = embedding_correlation
+        self.min_std = min_std
+
+    def forward(self, input: torch.Tensor, prev_embed: torch.Tensor):
+        embed_mean, embed_log_std = torch.split(
+            self.reference_encoder(torch.cat([input, prev_embed], dim=-1)),
+            self.embed_dim,
+            dim=-1
+        )
+        if self.predict_delta_embed:
+            embed_mean = embed_mean + self.embedding_correlation*prev_embed
+        std = torch.clamp(embed_log_std.exp(), min=self.min_std)
+        return Independent(Normal(embed_mean, std), 1)
+
 class HierarchicalRnnPolicy(BasePolicy):
     def __init__(
         self,
@@ -418,27 +458,25 @@ class HierarchicalRnnPolicy(BasePolicy):
         self.seq_steps = seq_steps
         self.truncated_bptt_steps = min(truncated_bptt_steps, seq_steps) if truncated_bptt_steps else seq_steps
 
-        reference_encoder_layers = torch_layers.create_mlp(
-            self.features_extractor.sub_features_dim['ref_encoder'] + self.embed_size,
-            2*self.embed_size,
-            net_arch=self.ref_encoder_n_layers*[self.ref_encoder_layer_size],
-            activation_fn=self.activation_fn
+        self.reference_encoder = RecurrentEncoder(
+            self.features_extractor.sub_features_dim['ref_encoder'],
+            self.embed_size,
+            self.ref_encoder_n_layers,
+            self.ref_encoder_layer_size,
+            self.activation_fn,
+            self.layer_norm,
+            self.predict_delta_embed,
+            self.embedding_correlation
         )
-        if self.layer_norm:
-            for layer in range(1, 3*self.ref_encoder_n_layers-1, 3):
-                reference_encoder_layers.insert(layer, nn.LayerNorm(self.ref_encoder_layer_size))
-        self.reference_encoder = nn.Sequential(*reference_encoder_layers)
 
-        action_decoder_layers = torch_layers.create_mlp(
+        action_decoder_layers = create_mlp(
             self.features_extractor.sub_features_dim['decoder'] + self.embed_size,
             self.action_space.shape[0],
             net_arch=self.decoder_n_layers*[self.decoder_layer_size],
             activation_fn=self.activation_fn,
-            squash_output=self.squash_output
+            squash_output=self.squash_output,
+            layer_norm=self.layer_norm
         )
-        if self.layer_norm:
-            for layer in range(1, 3*self.decoder_n_layers-1, 3):
-                action_decoder_layers.insert(layer, nn.LayerNorm(self.decoder_layer_size))
         self.action_decoder = nn.Sequential(*action_decoder_layers)
 
     def _get_constructor_parameters(self) -> Dict[str, Any]:
@@ -455,7 +493,8 @@ class HierarchicalRnnPolicy(BasePolicy):
                 embedding_kl_weight=self.embedding_kl_weight,
                 embedding_correlation=self.embedding_correlation,
                 predict_delta_embed=self.predict_delta_embed,
-                seq_steps=self.seq_steps
+                seq_steps=self.seq_steps,
+                truncated_bptt_steps=self.truncated_bptt_steps
             )
         )
         return data
@@ -472,64 +511,72 @@ class HierarchicalRnnPolicy(BasePolicy):
         prev_embed: torch.Tensor,
         deterministic: bool = False
     ):
-        delta_embed_mean, embed_log_std = torch.split(
-            self.reference_encoder(torch.cat([ref_encoder_input, prev_embed], dim=-1)),
-            self.embed_size,
-            dim=-1
-        )
-        if self.predict_delta_embed:
-            embed_mean = delta_embed_mean + self.embedding_correlation*prev_embed
-        else:
-            embed_mean = delta_embed_mean
-        embed_gaussian = Independent(Normal(embed_mean, embed_log_std.exp()), -1)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), -1)
-        embed = embed_mean if deterministic else embed_gaussian.rsample()
+        embed, embed_distribution = self.ref_encoder_forward(ref_encoder_input, prev_embed, deterministic)
+        act_distribution = self.action_decoder_forward(decoder_input, embed)
+        return act_distribution, embed_distribution, embed
 
-        act = self.action_decoder(torch.cat([decoder_input, embed], dim=-1))
-        act_gaussian = Independent(Normal(act, self.std_dev), -1)
+    def ref_encoder_forward(
+        self,
+        ref_encoder_input: torch.Tensor,
+        prev_embed: torch.Tensor,
+        deterministic: bool = False
+    ):
+        embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
+        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
+        embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
-        return act_gaussian, embed_gaussian, embed
+        return embed, embed_distribution
+
+    def action_decoder_forward(
+        self,
+        proprio_input: torch.Tensor,
+        embed: torch.Tensor
+    ):
+        act = self.action_decoder(torch.cat([proprio_input, embed], dim=-1))
+        act_distribution = Independent(Normal(act, self.std_dev), 1)
+
+        return act_distribution
 
     def training_step(self, batch, batch_idx, hiddens):
         obs, acts, weights = batch
         features = self.extract_features(obs)
         references, proprios = features['ref_encoder'], features['decoder']
         B, T, _ = acts.shape
-        if hiddens is None:
-            embed = torch.as_tensor(self.initial_state(B))
-            embed = embed.type_as(acts)
-        else:
-            embed = hiddens
-        total_log_prob, total_mse, total_kl, total_embed_std, total_embed_dist = 0, 0, 0, 0, 0
+        embed = hiddens if hiddens is not None else torch.as_tensor(self.initial_state(B)).type_as(acts)
+        total_kl, total_embed_std, total_delta_embed = 0, 0, 0
         all_embeds = [embed]
         for t in range(T):
-            act_gaussian, next_embed_gaussian, next_embed = self(references[:, t], proprios[:, t], embed)
-
-            prior_gaussian = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), -1)
-            log_prob = act_gaussian.log_prob(acts[:, t])
-            mse = F.mse_loss(act_gaussian.mean, acts[:, t])
-            kl = kl_divergence(next_embed_gaussian, prior_gaussian).mean()
-            total_log_prob += weights[:, t] @ log_prob
-            total_mse += mse
+            next_embed, next_embed_distribution = self.ref_encoder_forward(references[:, t], embed)
+            prior_embed_distribution = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), 1)
+            kl = kl_divergence(next_embed_distribution, prior_embed_distribution).sum()
             total_kl += kl
-            total_embed_std += torch.norm(next_embed_gaussian.stddev, dim=-1).mean().item() / np.sqrt(self.embed_size)
-            total_embed_dist += torch.norm(next_embed_gaussian.mean - self.embedding_correlation*embed, dim=-1).mean().item() / np.sqrt(self.embed_size)
+            with torch.no_grad():
+                total_embed_std += next_embed_distribution.stddev.mean()
+                total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - prior_embed_distribution.mean))
 
             embed = next_embed
             all_embeds.append(embed)
-        
-        all_embeds = torch.stack(all_embeds, -1)
-        embed_mean = torch.norm(torch.mean(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
-        embed_std = torch.norm(torch.std(all_embeds, -1), dim=-1).mean().item() / np.sqrt(self.embed_size)
+        embeds = torch.stack(all_embeds, 1)
 
-        loss = (-total_log_prob + self.embedding_kl_weight*total_kl) / T
-        self.log("loss/mse", total_mse/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/kl_div", total_kl/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("loss/loss", loss, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/delta_mean", total_embed_dist/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/delta_std", total_embed_std/T, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/embed_mean", embed_mean, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        self.log("embed/embed_std", embed_std, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        act_distribution = self.action_decoder_forward(proprios, embeds[:, 1:])
+        log_prob = act_distribution.log_prob(acts)
+        weighted_log_prob = torch.einsum('ij,ij', weights, log_prob)
+        loss = (-weighted_log_prob + self.embedding_kl_weight*total_kl) / (B*T)
+
+        with torch.no_grad():
+            mse = F.mse_loss(act_distribution.mean, acts)
+            embed_mean = torch.mean(embeds)
+            embed_std = torch.std(embeds)
+
+        log = lambda name, metric: self.log(name, metric, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        log("loss/mse", mse.item())
+        log("loss/weighted_log_prob_loss", -weighted_log_prob.item() / (B*T))
+        log("loss/kl_div", total_kl.item()/ (B*T))
+        log("loss/loss", loss.item())
+        log("embed/delta_mean", total_delta_embed.item()/T)
+        log("embed/delta_std", total_embed_std.item()/T)
+        log("embed/embed_mean", embed_mean.item())
+        log("embed/embed_std", embed_std.item())
         return dict(loss=loss, hiddens=embed)
 
     def _predict(
@@ -540,8 +587,8 @@ class HierarchicalRnnPolicy(BasePolicy):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         features = self.extract_features(observation)
         references, proprios = features['ref_encoder'], features['decoder']
-        act_gaussian, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
-        return act_gaussian.mean, next_embed
+        act_distribution, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
+        return act_distribution.mean, next_embed
 
     def tbptt_split_batch(self, batch, split_size):
         obs, acts, weights = batch
@@ -554,6 +601,267 @@ class HierarchicalRnnPolicy(BasePolicy):
             splits.append((obs_subseq, acts_subseq, weights_subseq))
         return splits
 
+class McpPrimitives(nn.Module):
+    def __init__(
+        self,
+        obs_dim: int,
+        act_dim: int,
+        n_shared_layers: int,
+        shared_layer_size: int,
+        n_primitives: int,
+        n_primitive_layers: int,
+        primitive_layer_size: int,
+        activation_fn: Type[nn.Module],
+        layer_norm: bool = False
+    ):
+        super().__init__()
+        shared_layers = create_mlp(
+            obs_dim,
+            shared_layer_size,
+            net_arch=(n_shared_layers-1)*[shared_layer_size],
+            activation_fn=activation_fn,
+            layer_norm=layer_norm
+        )
+        if layer_norm:
+            shared_layers.append(nn.LayerNorm(shared_layer_size))
+        shared_layers.append(activation_fn())
+        self.shared_net = nn.Sequential(*shared_layers)
+
+        self.n_primitives = n_primitives
+        self.act_dim = act_dim
+        primitives = []
+        for _ in range(n_primitives):
+            primitive_layers = create_mlp(
+                shared_layer_size,
+                2*act_dim,
+                net_arch=n_primitive_layers*[primitive_layer_size],
+                activation_fn=activation_fn,
+                layer_norm=layer_norm
+            )
+            primitives.append(nn.Sequential(*primitive_layers))
+        self.primitive_nets = nn.ModuleList(primitives)
+
+    def forward(self, obs: torch.Tensor):
+        shared_features = self.shared_net(obs)
+        means, log_stds = [], []
+        for primitive_net in self.primitive_nets:
+            mean, log_std = torch.split(
+                primitive_net(shared_features),
+                self.act_dim,
+                dim=-1
+            )
+            means.append(mean)
+            log_stds.append(log_std)
+        return torch.stack(means, dim=-2), torch.stack(log_stds, dim=-2)
+
+class McpPolicy(BasePolicy):
+    def __init__(
+        self,
+        observation_space: gym.spaces.Space,
+        action_space: gym.spaces.Space,
+        observables: Dict[Text, Sequence[Text]],
+        ref_steps: Sequence[int],
+        learning_rate: float,
+        embed_size: int = 60,
+        ref_encoder_n_layers: int = 2,
+        ref_encoder_layer_size: int = 1024,
+        n_primitives: int = 8,
+        gating_n_layers: int = 2,
+        gating_layer_size: int = 512,
+        n_shared_primitive_layers: int = 2,
+        shared_primitive_layer_size: int = 512,
+        n_primitive_layers: int = 1,
+        primitive_layer_size: int = 512,
+        layer_norm: bool = True,
+        min_primitive_std: float = 0.01,
+        embedding_kl_weight: float = 0.1,
+        embedding_correlation: float = 0.95,
+        predict_delta_embed: bool = False,
+        seq_steps: int = 30,
+        truncated_bptt_steps: Optional[int] = None,
+        activation_fn: Text = 'torch.nn.ELU',
+        squash_output: bool = False,
+        features_extractor_class: Type[features_extractor.CmuHumanoidFeaturesExtractor] = features_extractor.CmuHumanoidFeaturesExtractor,
+        features_extractor_kwargs: Optional[Dict[str, Any]] = None,
+        optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        optimizer_scheduler_class: Type[torch.optim.lr_scheduler._LRScheduler] = None,
+        optimizer_scheduler_kwargs: Optional[Dict[str, Any]] = None
+    ):
+        assert 0 <= embedding_correlation <= 1
+        super().__init__(observation_space, action_space, observables, ref_steps, learning_rate, activation_fn,
+                         squash_output, 0.1, features_extractor_class, features_extractor_kwargs,
+                         optimizer_class, optimizer_kwargs, optimizer_scheduler_class,
+                         optimizer_scheduler_kwargs)
+        self.embed_size = embed_size
+        self.ref_encoder_n_layers = ref_encoder_n_layers
+        self.ref_encoder_layer_size = ref_encoder_layer_size
+        self.n_primitives = n_primitives
+        self.gating_n_layers = gating_n_layers
+        self.gating_layer_size = gating_layer_size
+        self.n_shared_primitive_layers = n_shared_primitive_layers
+        self.shared_primitive_layer_size = shared_primitive_layer_size
+        self.n_primitive_layers = n_primitive_layers
+        self.primitive_layer_size = primitive_layer_size
+        self.layer_norm = layer_norm
+        self.min_primtive_std = min_primitive_std
+        self.embedding_kl_weight = embedding_kl_weight
+        self.embedding_correlation = embedding_correlation
+        self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
+        self.predict_delta_embed = predict_delta_embed
+        self.seq_steps = seq_steps
+        self.truncated_bptt_steps = seq_steps
+
+        self.reference_encoder = RecurrentEncoder(
+            self.features_extractor.sub_features_dim['ref_encoder'],
+            self.embed_size,
+            self.ref_encoder_n_layers,
+            self.ref_encoder_layer_size,
+            self.activation_fn,
+            self.layer_norm,
+            self.predict_delta_embed,
+            self.embedding_correlation
+        )
+
+        gating_layers = create_mlp(
+            self.features_extractor.sub_features_dim['decoder'] + self.embed_size,
+            self.n_primitives,
+            net_arch=self.gating_n_layers*[self.gating_layer_size],
+            activation_fn=self.activation_fn,
+            layer_norm=self.layer_norm
+        )
+        #gating_layers.append(nn.LogSigmoid())
+        self.gating_net = nn.Sequential(*gating_layers)
+
+        self.primitives = McpPrimitives(
+            self.features_extractor.sub_features_dim['decoder'],
+            self.action_space.shape[0],
+            self.n_shared_primitive_layers,
+            self.shared_primitive_layer_size,
+            self.n_primitives,
+            self.n_primitive_layers,
+            self.primitive_layer_size,
+            self.activation_fn,
+            layer_norm=self.layer_norm
+        )
+
+    def initial_state(self, batch_size=1, deterministic=False):
+        if deterministic:
+            return np.zeros((batch_size, self.embed_size)).astype(np.float32)
+        return np.random.randn(batch_size, self.embed_size).astype(np.float32)
+
+    def forward(
+        self,
+        ref_encoder_input: torch.Tensor,
+        decoder_input: torch.Tensor,
+        prev_embed: torch.Tensor,
+        deterministic: bool = False
+    ):
+        embed, embed_distribution = self.ref_encoder_forward(ref_encoder_input, prev_embed, deterministic)
+        act_distribution, _ = self.action_decoder_forward(decoder_input, embed)
+        return act_distribution, embed_distribution, embed
+
+    def ref_encoder_forward(
+        self,
+        ref_encoder_input: torch.Tensor,
+        prev_embed: torch.Tensor,
+        deterministic: bool = False
+    ):
+        embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
+        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
+        embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
+
+        return embed, embed_distribution
+
+    def action_decoder_forward(
+        self,
+        proprio_input: torch.Tensor,
+        embed: torch.Tensor
+    ):
+        log_weights = self.gating_net(torch.cat([proprio_input, embed], dim=-1))
+        means, log_stds = self.primitives(proprio_input)
+        log_stds = log_stds.clamp(min=np.log(self.min_primtive_std))
+
+        scores = log_weights.unsqueeze(-1) - log_stds
+        primitive_weights = torch.softmax(scores, dim=-2)
+        act = torch.sum(primitive_weights * means, dim=-2)
+        log_std = -torch.logsumexp(scores, dim=-2)
+        act_distribution = Independent(Normal(act, log_std.exp()), 1)
+
+        return act_distribution, (primitive_weights,)
+
+    def training_step(self, batch, batch_idx, hiddens):
+        obs, acts, weights = batch
+        features = self.extract_features(obs)
+        references, proprios = features['ref_encoder'], features['decoder']
+        B, T, _ = acts.shape
+        embed = hiddens if hiddens is not None else torch.as_tensor(self.initial_state(B)).type_as(acts)
+        total_kl, total_embed_std, total_delta_embed = 0, 0, 0
+        all_embeds = [embed]
+        for t in range(T):
+            next_embed, next_embed_distribution = self.ref_encoder_forward(references[:, t], embed)
+            prior_embed_distribution = Independent(Normal(self.embedding_correlation*embed, self.embedding_std_dev), 1)
+            kl = kl_divergence(next_embed_distribution, prior_embed_distribution).sum()
+            total_kl += kl
+            with torch.no_grad():
+                total_embed_std += next_embed_distribution.stddev.mean()
+                total_delta_embed += torch.mean(torch.abs(next_embed_distribution.mean - prior_embed_distribution.mean))
+
+            embed = next_embed
+            all_embeds.append(embed)
+        embeds = torch.stack(all_embeds, 1)
+
+        act_distribution, (primitive_weights,) = self.action_decoder_forward(proprios, embeds[:, 1:])
+        log_prob = act_distribution.log_prob(acts)
+        weighted_log_prob = torch.einsum('ij,ij', weights, log_prob)
+        loss = (-weighted_log_prob + self.embedding_kl_weight*total_kl) / (B*T)
+
+        with torch.no_grad():
+            mse = F.mse_loss(act_distribution.mean, acts)
+            embed_mean = torch.mean(embeds)
+            embed_std = torch.std(embeds)
+            primitive_weights_entropy = torch.mean(torch.sum(-primitive_weights * primitive_weights.log(), dim=-2)) / np.log(self.n_primitives)
+            act_entropy = act_distribution.entropy().mean()
+
+        log = lambda name, metric: self.log(name, metric, on_step=True, on_epoch=False, prog_bar=True, logger=True)
+        log("loss/mse", mse.item())
+        log("loss/weighted_log_prob_loss", -weighted_log_prob.item() / (B*T))
+        log("loss/kl_div", total_kl.item()/ (B*T))
+        log("loss/loss", loss.item())
+        log("embed/delta_mean", total_delta_embed.item()/T)
+        log("embed/delta_std", total_embed_std.item()/T)
+        log("embed/embed_mean", embed_mean.item())
+        log("embed/embed_std", embed_std.item())
+        log("mcp/primitive_weights_entropy", primitive_weights_entropy.item())
+        log("mcp/act_entropy", act_entropy.item())
+        return dict(loss=loss, hiddens=embed)
+
+    def _predict(
+        self,
+        observation: torch.Tensor,
+        embed: torch.Tensor,
+        deterministic: bool = False
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        features = self.extract_features(observation)
+        references, proprios = features['ref_encoder'], features['decoder']
+        act_distribution, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
+        return act_distribution.mean, next_embed
+
+    def tbptt_split_batch(self, batch, split_size):
+        obs, acts, weights = batch
+        T = acts.shape[1]
+        splits = []
+        for t in range(0, T, split_size):
+            obs_subseq = {k: v[:, t:t+split_size] for k, v in obs.items()}
+            acts_subseq = acts[:, t:t+split_size]
+            weights_subseq = weights[:, t:t+split_size]
+            splits.append((obs_subseq, acts_subseq, weights_subseq))
+        return splits
+
+
+#######
+# GPT
+#######
 class GPTConfig:
     """ base GPT config, params common to all GPT versions """
     embd_pdrop = 0.1
