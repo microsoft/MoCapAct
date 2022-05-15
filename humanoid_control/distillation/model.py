@@ -383,7 +383,8 @@ class RecurrentEncoder(nn.Module):
         activation_fn: Type[nn.Module],
         layer_norm: bool = False,
         predict_delta_embed: bool = False,
-        embedding_correlation: float = 0.95
+        embedding_correlation: float = 0.95,
+        min_std: float = 1e-5
     ):
         super().__init__()
         layers = create_mlp(
@@ -397,6 +398,7 @@ class RecurrentEncoder(nn.Module):
         self.embed_dim = embed_dim
         self.predict_delta_embed = predict_delta_embed
         self.embedding_correlation = embedding_correlation
+        self.min_std = min_std
 
     def forward(self, input: torch.Tensor, prev_embed: torch.Tensor):
         embed_mean, embed_log_std = torch.split(
@@ -406,7 +408,8 @@ class RecurrentEncoder(nn.Module):
         )
         if self.predict_delta_embed:
             embed_mean = embed_mean + self.embedding_correlation*prev_embed
-        return Independent(Normal(embed_mean, embed_log_std.exp()), 1)
+        std = torch.clamp(embed_log_std.exp(), min=self.min_std)
+        return Independent(Normal(embed_mean, std), 1)
 
 class HierarchicalRnnPolicy(BasePolicy):
     def __init__(
