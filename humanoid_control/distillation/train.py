@@ -152,7 +152,7 @@ def main(_):
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
             concat_observables=False,
-            metrics_path=dataset_metrics_path,
+            metrics_path=dataset_metrics_path if not FLAGS.do_validation_loop else None, # TODO: Have val dataset compute its own stats
             keep_hdf5s_open=FLAGS.keep_hdf5s_open
         )
 
@@ -200,7 +200,7 @@ def main(_):
         train_callbacks.append(pl.callbacks.ModelCheckpoint(
             dirpath=osp.join(output_dir, "eval/validation"),
             filename="best",
-            monitor="val_loss/mse",
+            monitor="val_loss/loss",
             save_top_k=1,
             every_n_train_steps=FLAGS.validation_freq+1 # add one to ensure it saves after the validation
         ))
