@@ -78,7 +78,7 @@ config_flags.DEFINE_config_dict("eval", eval_config)
 # Misc. hyperparameters
 flags.DEFINE_float("gamma", 0.95, "Discount factor")
 flags.DEFINE_integer("seed", 0, "RNG seed for training")
-flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1"], "Device to do training on")
+flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1", "cuda:2", "cuda:3"], "Device to do training on")
 flags.DEFINE_bool("check_other_runs", False, "Whether to check if preceding runs were finished")
 flags.DEFINE_bool("do_logging", True, "Whether to log")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
