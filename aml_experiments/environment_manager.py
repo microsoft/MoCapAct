@@ -10,12 +10,20 @@ def create_env(ws, env_name, requirements_file_path):
 
     conda_dependencies = CondaDependencies()
     conda_dependencies.set_python_version('3.7')
+    conda_dependencies.add_channel('menpo')
+    conda_dependencies.add_channel('conda-forge')
+
     conda_dependencies.add_conda_package('pip==21.2.2')
+    conda_dependencies.add_conda_package('glew')
+    conda_dependencies.add_conda_package('mesalib')
+    conda_dependencies.add_conda_package('glfw3')
+    conda_dependencies.add_conda_package('imageio-ffmpeg')
 
     for p in Environment.from_pip_requirements(name="myenv", file_path=requirements_file_path).python.conda_dependencies.pip_packages:
         conda_dependencies.add_pip_package(p)
 
     env.python.conda_dependencies = conda_dependencies
+    env.environment_variables['MUJOCO_GL'] = 'osmesa'
     env.register(ws)
     return env
 

@@ -37,8 +37,9 @@ script_run_config = ScriptRunConfig(
         "--output_root", './logs',
         "--train_dataset_files", "CMU_016_22-0-82.hdf5",
         # "--eval_freq", "1",
-        "--max_timesteps", "1e8",
-        "--phi", "0"
+        "--max_timesteps", "1e9",
+        "--phi", "0",
+        "--record_video", "True",
     ],
     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'))

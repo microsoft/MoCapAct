@@ -1,7 +1,10 @@
 import os
+import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 import random
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import gym
 
 from absl import flags, app
 import ml_collections
@@ -12,13 +15,13 @@ from torch.utils.data.dataloader import DataLoader
 import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder, DummyVecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder, DummyVecEnv, VecEnv, VecMonitor, is_vecenv_wrapped
+from humanoid_control.sb3 import wrappers
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control import observables
 from humanoid_control.envs import env_util
 from humanoid_control.envs import tracking
-from humanoid_control.envs import wrappers
 from humanoid_control.offline_rl.d4rl_dataset import D4RLDataset
 from humanoid_control.offline_rl.continuous_bcq.BCQ import BCQ
 
@@ -122,36 +125,150 @@ def make_env(
         n_envs=n_workers,
         seed=seed,
         env_kwargs=env_kwargs,
-        vec_env_cls=DummyVecEnv,  # SubprocVecEnv
+        vec_env_cls=DummyVecEnv,  # SubprocVecEnv,
+        vec_monitor_cls=wrappers.MocapTrackingVecMonitor
     )
     if record_video and video_folder:
         env = VecVideoRecorder(env, video_folder,
                                record_video_trigger=lambda x: x >= 0,
                                video_length=float('inf'))
 
+    env = VecNormalize(env, training=training, gamma=gamma,
+                       norm_obs=normalize_obs,
+                       norm_reward=normalize_rew,
+                       norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
+
     return env
 
 
 def eval_policy(
     policy,
-    eval_env,
-    eval_episodes=10
-):
-    ret = 0.
-    for _ in range(eval_episodes):
-        obs_dicts, dones = eval_env.reset(), np.array([False] * eval_env.num_envs)
-        while not dones.any():
-            obs = np.concatenate(list({k: obs_dicts[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
-            actions = policy.select_action(obs)
-            obs_dicts, rewards, dones, infos = eval_env.step(actions)
-            ret += np.average(rewards)
+    env: Union[gym.Env, VecEnv],
+    n_eval_episodes: int = 10,
+    deterministic: bool = True,
+    render: bool = False,
+    callback: Optional[Callable[[Dict[str, Any], Dict[str, Any]], None]] = None,
+    reward_threshold: Optional[float] = None,
+    return_episode_rewards: bool = False,
+    warn: bool = True,
+) -> Union[Tuple[float, float], Tuple[List[float], List[int]]]:
+    """
+    Runs policy for ``n_eval_episodes`` episodes and returns average reward.
+    If a vector env is passed in, this divides the episodes to evaluate onto the
+    different elements of the vector env. This static division of work is done to
+    remove bias. See https://github.com/DLR-RM/stable-baselines3/issues/402 for more
+    details and discussion.
+    We additionally return the average normalized reward to allow for better per-clip
+    comparison.
+    .. note::
+        If environment has not been wrapped with ``Monitor`` wrapper, reward and
+        episode lengths are counted as it appears with ``env.step`` calls. If
+        the environment contains wrappers that modify rewards or episode lengths
+        (e.g. reward scaling, early episode reset), these will affect the evaluation
+        results as well. You can avoid this by wrapping environment with ``Monitor``
+        wrapper before anything else.
+    :param model: The RL agent you want to evaluate.
+    :param env: The gym environment or ``VecEnv`` environment.
+    :param n_eval_episodes: Number of episode to evaluate the agent
+    :param deterministic: Whether to use deterministic or stochastic actions
+    :param render: Whether to render the environment or not
+    :param callback: callback function to do additional checks,
+        called after each step. Gets locals() and globals() passed as parameters.
+    :param reward_threshold: Minimum expected reward per episode,
+        this will raise an error if the performance is not met
+    :param return_episode_rewards: If True, a list of rewards and episode lengths
+        per episode will be returned instead of the mean.
+    :param warn: If True (default), warns user about lack of a Monitor wrapper in the
+        evaluation environment.
+    :return: Mean reward per episode, std of reward per episode.
+        Returns ([float], [int]) when ``return_episode_rewards`` is True, first
+        list containing per-episode rewards and second containing per-episode lengths
+        (in number of steps).
+    """
+    is_monitor_wrapped = False
+    # Avoid circular import
+    from stable_baselines3.common.monitor import Monitor
 
-    avg_reward = ret / eval_episodes
+    if not isinstance(env, VecEnv):
+        env = DummyVecEnv([lambda: env])
 
-    print("---------------------------------------")
-    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
-    print("---------------------------------------")
-    return avg_reward
+    is_monitor_wrapped = is_vecenv_wrapped(env, VecMonitor) or env.env_is_wrapped(Monitor)[0]
+
+    if not is_monitor_wrapped and warn:
+        warnings.warn(
+            "Evaluation environment is not wrapped with a ``Monitor`` wrapper. "
+            "This may result in reporting modified episode lengths and rewards, if other wrappers happen to modify these. "
+            "Consider wrapping environment first with ``Monitor`` wrapper.",
+            UserWarning,
+        )
+
+    n_envs = env.num_envs
+    episode_rewards = []
+    episode_lengths = []
+    episode_norm_rewards = []
+    episode_norm_lengths = []
+
+    episode_counts = np.zeros(n_envs, dtype="int")
+    # Divides episodes among different sub environments in the vector as evenly as possible
+    episode_count_targets = np.array([(n_eval_episodes + i) // n_envs for i in range(n_envs)], dtype="int")
+
+    current_rewards = np.zeros(n_envs)
+    current_lengths = np.zeros(n_envs, dtype="int")
+    observations = env.reset()
+    frames = []
+    episode_starts = np.ones((env.num_envs,), dtype=bool)
+    while (episode_counts < episode_count_targets).any():
+        observations = np.concatenate(list({k: observations[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
+        actions = policy.select_action(observations)
+        observations, rewards, dones, infos = env.step(actions)
+        current_rewards += rewards
+        current_lengths += 1
+        for i in range(n_envs):
+            if episode_counts[i] < episode_count_targets[i]:
+
+                # unpack values so that the callback can access the local variables
+                reward = rewards[i]
+                done = dones[i]
+                info = infos[i]
+                episode_starts[i] = done
+
+                if callback is not None:
+                    callback(locals(), globals())
+
+                if dones[i]:
+                    if is_monitor_wrapped:
+                        # Atari wrapper can send a "done" signal when
+                        # the agent loses a life, but it does not correspond
+                        # to the true end of episode
+                        if "episode" in info.keys():
+                            # Do not trust "done" with episode endings.
+                            # Monitor wrapper includes "episode" key in info if environment
+                            # has been wrapped with it. Use those rewards instead.
+                            episode_rewards.append(info["episode"]["r"])
+                            episode_lengths.append(info["episode"]["l"])
+                            episode_norm_rewards.append(info["episode"]["r_norm"])
+                            episode_norm_lengths.append(info["episode"]["l_norm"])
+                            # Only increment at the real end of an episode
+                            episode_counts[i] += 1
+                    else:
+                        episode_rewards.append(current_rewards[i])
+                        episode_lengths.append(current_lengths[i])
+                        episode_counts[i] += 1
+                    current_rewards[i] = 0
+                    current_lengths[i] = 0
+
+        if render:
+            # Custom rendering using the physics object of the first vec env.
+            frame = env.get_attr('physics')[0].render(width=640, height=480, camera_id=3).copy()
+            frames.append(frame)
+
+    mean_reward = np.mean(episode_rewards)
+    std_reward = np.std(episode_rewards)
+    if reward_threshold is not None:
+        assert mean_reward > reward_threshold, "Mean reward below threshold: " f"{mean_reward:.2f} < {reward_threshold:.2f}"
+    if return_episode_rewards:
+        return episode_rewards, episode_lengths, episode_norm_rewards, episode_norm_lengths, frames
+    return mean_reward, std_reward
 
 
 def main(_):
@@ -161,7 +278,6 @@ def main(_):
     if FLAGS.use_tensorboard:
         from tensorboardX import SummaryWriter
         tb_writer = SummaryWriter(log_dir=os.path.join(output_dir, "tensorboard"))
-
 
     # Log some stuff (but only in process 0)
     if os.getenv("LOCAL_RANK", "0") == "0":
@@ -242,6 +358,7 @@ def main(_):
         act_noise=0.,
         always_init_at_clip_start=False,
         record_video=FLAGS.record_video,
+        video_folder=output_dir,
         termination_error_threshold=FLAGS.termination_error_threshold
     )
 
@@ -264,13 +381,17 @@ def main(_):
         logger.log_metric('critic_loss', critic_loss.tolist())
         logger.log_metric('actor_loss', actor_loss.tolist())
 
-        eval_avg_reward = eval_policy(
+        eval_avg_reward, eval_std_reward = eval_policy(
             policy,
             eval_env,
+            # render=True
         )
 
         tb_writer.add_scalar('eval_avg_reward', eval_avg_reward, training_iters)
+        tb_writer.add_scalar('eval_std_reward', eval_std_reward, training_iters)
+
         logger.log_metric('eval_avg_reward', eval_avg_reward)
+        logger.log_metric('eval_std_reward', eval_std_reward)
 
         training_iters += FLAGS.eval_freq
         print(f"Training iterations: {training_iters}")
