@@ -2,6 +2,7 @@ import os.path as osp
 from typing import Sequence, Text
 from pathlib import Path
 import numpy as np
+import imageio
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
@@ -84,22 +85,19 @@ class PolicyEvaluationCallback(Callback):
             vec_env_cls=SubprocVecEnv if not self._serial_evaluation else DummyVecEnv,
             vec_monitor_cls=wrappers.MocapTrackingVecMonitor
         )
-        if self._record_video:
-            self._env = VecVideoRecorder(self._env, self._log_dir,
-                                         record_video_trigger=lambda x: x>=0,
-                                         video_length=float('inf'))
 
     def on_batch_end(self, trainer: "pl.Trainer", model: "pl.LightningModule") -> None:
         self.n_calls += 1
         if model.global_rank == 0 and self._eval_freq > 0 and self.n_calls % self._eval_freq == 0:
             self._create_env()
             self._env.seed(self._seed)
-            ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
+            ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, ep_frames = evaluation.evaluate_locomotion_policy(
                 model,
                 self._env,
                 n_eval_episodes=self._n_eval_episodes,
                 deterministic=False,
-                return_episode_rewards=True
+                return_episode_rewards=True,
+                render=self._record_video
             )
             self._steps.append(trainer.global_step)
             self._rewards.append(ep_rews)
@@ -126,4 +124,6 @@ class PolicyEvaluationCallback(Callback):
             if metrics[f"eval/{self._prefix}norm_rew"] > self._best_reward:
                 self._best_reward = metrics[f"eval/{self._prefix}norm_rew"]
                 trainer.save_checkpoint(osp.join(self._log_dir, 'best_model.ckpt'))
-            self._env.close() # close environment to prevent memory leak
+                if self._record_video:
+                    imageio.mimwrite(osp.join(self._log_dir, 'rollouts.mp4'), ep_frames, fps=30)
+            self._env.close() # close environment since it consumes a lot of memory
