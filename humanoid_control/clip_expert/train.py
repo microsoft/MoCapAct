@@ -128,7 +128,7 @@ def is_still_running(root):
     return False
 
 def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
-             act_noise=0., always_init_at_clip_start=False, video_folder=None,
+             act_noise=0., always_init_at_clip_start=False,
              termination_error_threshold=float('inf')):
     dataset = types.ClipCollection(
         ids=[FLAGS.clip_id],
@@ -155,10 +155,6 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
         vec_env_cls=SubprocVecEnv,
         vec_monitor_cls=wrappers.MocapTrackingVecMonitor
     )
-    if FLAGS.record_video and video_folder:
-        env = VecVideoRecorder(env, video_folder,
-                               record_video_trigger=lambda x: x>=0,
-                               video_length=float('inf'))
     env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
                        norm_obs=FLAGS.normalize_observation,
                        norm_reward=FLAGS.normalize_reward,
@@ -253,7 +249,6 @@ def main(_):
                                             end_step=end_step, min_steps=FLAGS.eval.min_steps,
                                             act_noise=FLAGS.eval.random_eval_act_noise,
                                             training=False, always_init_at_clip_start=False,
-                                            video_folder=random_eval_path,
                                             termination_error_threshold=FLAGS.termination_error_threshold)
     eval_freq = int(FLAGS.eval.freq / FLAGS.n_workers)
     random_eval_model_path = osp.join(random_eval_path, 'model')
@@ -275,8 +270,8 @@ def main(_):
         callback_after_eval=early_stopping_callback,
         n_eval_episodes=FLAGS.eval.n_random_episodes,
         deterministic=True,
-        render=False,
-        name="eval_random"
+        record_video=FLAGS.record_video,
+        name="eval_rsi"
     )
 
     # Evaluation environment where start point is beginning of snippet
@@ -284,7 +279,6 @@ def main(_):
                                            act_noise=FLAGS.eval.start_eval_act_noise, end_step=end_step,
                                            min_steps=FLAGS.eval.min_steps, training=False,
                                            always_init_at_clip_start=True,
-                                           video_folder=start_eval_path,
                                            termination_error_threshold=FLAGS.termination_error_threshold)
     start_eval_model_path = osp.join(start_eval_path, 'model')
     callback_on_new_best = callbacks.SaveVecNormalizeCallback(
@@ -299,7 +293,7 @@ def main(_):
         callback_on_new_best=callback_on_new_best,
         n_eval_episodes=FLAGS.eval.n_start_episodes,
         deterministic=True,
-        render=False,
+        record_video=FLAGS.record_video,
         name="eval_start"
     )
 
