@@ -14,7 +14,7 @@ from datetime import datetime
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.logger import configure
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecVideoRecorder
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from stable_baselines3.common.utils import get_device
 
 from dm_control.locomotion.tasks.reference_pose import types

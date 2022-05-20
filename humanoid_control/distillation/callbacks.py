@@ -5,7 +5,7 @@ import numpy as np
 import imageio
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control.envs import env_util
