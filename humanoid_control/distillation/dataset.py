@@ -27,6 +27,8 @@ class ExpertDataset(Dataset):
         max_seq_steps: int = 1,
         normalize_obs: bool = False,
         normalize_act: bool = False,
+        n_start_rollouts: int = -1,
+        n_rsi_rollouts: int = -1,
         concat_observables: bool = True,
         clip_weighted: bool = False,
         advantage_weights: bool = True,
@@ -79,6 +81,8 @@ class ExpertDataset(Dataset):
         self._max_weight = max_weight
         self._normalize_obs = normalize_obs
         self._normalize_act = normalize_act
+        self._n_start_rollouts = n_start_rollouts
+        self._n_rsi_rollouts = n_rsi_rollouts
         self._metrics_path = metrics_path
 
         # Grab the reference steps and indices for observables from the first HDF5.
@@ -290,12 +294,18 @@ class ExpertDataset(Dataset):
         for fname, clip_snippets, logical_indices, dset_groups in iterator:
             with h5py.File(fname, 'r') as dset:
                 self._dset_indices.append(self._total_len)
+                dset_start_rollouts = dset['n_start_rollouts'][...]
+                dset_rsi_rollouts = dset['n_random_rollouts'][...]
+                n_start_rollouts = dset_start_rollouts if self._n_start_rollouts < 0 else min(self._n_start_rollouts, dset_start_rollouts)
+                n_rsi_rollouts = dset_rsi_rollouts if self._n_rsi_rollouts < 0 else min(self._n_rsi_rollouts, dset_rsi_rollouts)
                 for snippet in clip_snippets:
-                    len_iterator = itertools.chain(dset[f"{snippet}/start_metrics/episode_lengths"],
-                                                   dset[f"{snippet}/rsi_metrics/episode_lengths"])
+                    len_iterator = itertools.chain(
+                        dset[f"{snippet}/start_metrics/episode_lengths"][:n_start_rollouts],
+                        dset[f"{snippet}/rsi_metrics/episode_lengths"][:n_rsi_rollouts]
+                    )
                     for i, ep_len in enumerate(len_iterator):
                         logical_indices.append(self._total_len)
-                        dset_groups.append(f"{snippet}/{i}")
+                        dset_groups.append(f"{snippet}/{i if i < n_start_rollouts else i-n_start_rollouts+dset_start_rollouts}")
                         if ep_len < self._min_seq_steps:
                             continue
                         self._total_len += ep_len - (self._min_seq_steps-1)
