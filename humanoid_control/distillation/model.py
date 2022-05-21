@@ -373,7 +373,7 @@ class HierarchicalMlpPolicy(BasePolicy):
 # Policies that use recurrent encoder
 #######################################
 
-class RecurrentEncoder(nn.Module):
+class StochasticEncoder(nn.Module):
     def __init__(
         self,
         input_dim: int,
@@ -382,32 +382,33 @@ class RecurrentEncoder(nn.Module):
         layer_size: int,
         activation_fn: Type[nn.Module],
         layer_norm: bool = False,
-        predict_delta_embed: bool = False,
+        recurrent: bool = True,
         embedding_correlation: float = 0.95,
         min_std: float = 1e-5
     ):
         super().__init__()
         layers = create_mlp(
-            input_dim + embed_dim,
+            input_dim+embed_dim if recurrent else input_dim,
             2*embed_dim,
             net_arch=n_layers*[layer_size],
             activation_fn=activation_fn,
             layer_norm=layer_norm
         )
         self.reference_encoder = nn.Sequential(*layers)
+        self.recurrent = recurrent
         self.embed_dim = embed_dim
-        self.predict_delta_embed = predict_delta_embed
         self.embedding_correlation = embedding_correlation
         self.min_std = min_std
 
-    def forward(self, input: torch.Tensor, prev_embed: torch.Tensor):
+    def forward(self, input: torch.Tensor, prev_embed: torch.Tensor = None):
+        if self.recurrent:
+            assert prev_embed is not None
+        inp = torch.cat([input, prev_embed], dim=-1) if self.recurrent else input
         embed_mean, embed_log_std = torch.split(
-            self.reference_encoder(torch.cat([input, prev_embed], dim=-1)),
+            self.reference_encoder(inp),
             self.embed_dim,
             dim=-1
         )
-        if self.predict_delta_embed:
-            embed_mean = embed_mean + self.embedding_correlation*prev_embed
         std = torch.clamp(embed_log_std.exp(), min=self.min_std)
         return Independent(Normal(embed_mean, std), 1)
 
@@ -427,9 +428,7 @@ class HierarchicalRnnPolicy(BasePolicy):
         layer_norm: bool = False,
         embedding_kl_weight: float = 0.1,
         embedding_correlation: float = 0.95,
-        predict_delta_embed: bool = False,
         seq_steps: int = 30,
-        truncated_bptt_steps: Optional[int] = None,
         activation_fn: Text = 'torch.nn.Tanh',
         squash_output: bool = False,
         std_dev: float = 0.1,
@@ -454,18 +453,15 @@ class HierarchicalRnnPolicy(BasePolicy):
         self.embedding_kl_weight = embedding_kl_weight
         self.embedding_correlation = embedding_correlation
         self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
-        self.predict_delta_embed = predict_delta_embed
         self.seq_steps = seq_steps
-        self.truncated_bptt_steps = min(truncated_bptt_steps, seq_steps) if truncated_bptt_steps else seq_steps
 
-        self.reference_encoder = RecurrentEncoder(
+        self.reference_encoder = StochasticEncoder(
             self.features_extractor.sub_features_dim['ref_encoder'],
             self.embed_size,
             self.ref_encoder_n_layers,
             self.ref_encoder_layer_size,
             self.activation_fn,
             self.layer_norm,
-            self.predict_delta_embed,
             self.embedding_correlation
         )
 
@@ -492,7 +488,6 @@ class HierarchicalRnnPolicy(BasePolicy):
                 layer_norm=self.layer_norm,
                 embedding_kl_weight=self.embedding_kl_weight,
                 embedding_correlation=self.embedding_correlation,
-                predict_delta_embed=self.predict_delta_embed,
                 seq_steps=self.seq_steps,
                 truncated_bptt_steps=self.truncated_bptt_steps
             )
@@ -537,12 +532,12 @@ class HierarchicalRnnPolicy(BasePolicy):
 
         return act_distribution
 
-    def training_step(self, batch, batch_idx, hiddens):
+    def run_batch(self, batch):
         obs, acts, weights = batch
         features = self.extract_features(obs)
         references, proprios = features['ref_encoder'], features['decoder']
         B, T, _ = acts.shape
-        embed = hiddens if hiddens is not None else torch.as_tensor(self.initial_state(B)).type_as(acts)
+        embed = torch.as_tensor(self.initial_state(B)).type_as(acts)
         total_kl, total_embed_std, total_delta_embed = 0, 0, 0
         all_embeds = [embed]
         for t in range(T):
@@ -568,16 +563,30 @@ class HierarchicalRnnPolicy(BasePolicy):
             embed_mean = torch.mean(embeds)
             embed_std = torch.std(embeds)
 
+        return loss, weighted_log_prob/(B*T), total_kl/(B*T), mse, total_delta_embed/T, total_embed_std/T, embed_mean, embed_std
+
+    def training_step(self, batch, batch_idx):
+        loss, weighted_log_prob, kl, mse, delta_embed_mean, delta_embed_std, embed_mean, embed_std = self.run_batch(batch)
         log = lambda name, metric: self.log(name, metric, on_step=True, on_epoch=False, prog_bar=True, logger=True)
-        log("loss/mse", mse.item())
-        log("loss/weighted_log_prob_loss", -weighted_log_prob.item() / (B*T))
-        log("loss/kl_div", total_kl.item()/ (B*T))
         log("loss/loss", loss.item())
-        log("embed/delta_mean", total_delta_embed.item()/T)
-        log("embed/delta_std", total_embed_std.item()/T)
+        log("loss/weighted_log_prob_loss", -weighted_log_prob.item())
+        log("loss/mse", mse.item())
+        log("loss/kl_div", kl.item())
+        log("embed/delta_mean", delta_embed_mean.item())
+        log("embed/delta_std", delta_embed_std.item())
         log("embed/embed_mean", embed_mean.item())
         log("embed/embed_std", embed_std.item())
-        return dict(loss=loss, hiddens=embed)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss, weighted_log_prob, kl, mse, _, _, _, _ = self.run_batch(batch)
+
+        log = lambda name, metric: self.log(name, metric, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        log("val_loss/loss", loss.item())
+        log("val_loss/weighted_log_prob_loss", -weighted_log_prob.item())
+        log("val_loss/mse", mse.item())
+        log("val_loss/kl_div", kl.item())
+        return loss
 
     def _predict(
         self,
@@ -589,17 +598,6 @@ class HierarchicalRnnPolicy(BasePolicy):
         references, proprios = features['ref_encoder'], features['decoder']
         act_distribution, _, next_embed = self.forward(references, proprios, embed, deterministic=deterministic)
         return act_distribution.mean, next_embed
-
-    def tbptt_split_batch(self, batch, split_size):
-        obs, acts, weights = batch
-        T = acts.shape[1]
-        splits = []
-        for t in range(0, T, split_size):
-            obs_subseq = {k: v[:, t:t+split_size] for k, v in obs.items()}
-            acts_subseq = acts[:, t:t+split_size]
-            weights_subseq = weights[:, t:t+split_size]
-            splits.append((obs_subseq, acts_subseq, weights_subseq))
-        return splits
 
 class McpPrimitives(nn.Module):
     def __init__(
@@ -676,9 +674,7 @@ class McpPolicy(BasePolicy):
         min_primitive_std: float = 0.01,
         embedding_kl_weight: float = 0.1,
         embedding_correlation: float = 0.95,
-        predict_delta_embed: bool = False,
         seq_steps: int = 30,
-        truncated_bptt_steps: Optional[int] = None,
         activation_fn: Text = 'torch.nn.ELU',
         squash_output: bool = False,
         features_extractor_class: Type[features_extractor.CmuHumanoidFeaturesExtractor] = features_extractor.CmuHumanoidFeaturesExtractor,
@@ -708,18 +704,15 @@ class McpPolicy(BasePolicy):
         self.embedding_kl_weight = embedding_kl_weight
         self.embedding_correlation = embedding_correlation
         self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
-        self.predict_delta_embed = predict_delta_embed
         self.seq_steps = seq_steps
-        self.truncated_bptt_steps = seq_steps
 
-        self.reference_encoder = RecurrentEncoder(
+        self.reference_encoder = StochasticEncoder(
             self.features_extractor.sub_features_dim['ref_encoder'],
             self.embed_size,
             self.ref_encoder_n_layers,
             self.ref_encoder_layer_size,
             self.activation_fn,
             self.layer_norm,
-            self.predict_delta_embed,
             self.embedding_correlation
         )
 
