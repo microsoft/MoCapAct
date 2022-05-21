@@ -12,6 +12,7 @@ from humanoid_control.envs import env_util
 from humanoid_control.envs import tracking
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import wrappers
+from humanoid_control import utils
 
 class PolicyEvaluationCallback(Callback):
     """
@@ -31,15 +32,12 @@ class PolicyEvaluationCallback(Callback):
         seed: int,
         prefix: str,
         log_dir: str,
+        run_at_beginning: bool = False,
         serial_evaluation: bool = False,
         record_video: bool = False,
         verbose: int = 0
     ) -> None:
-        splits = [clip.split('-') for clip in clips]
-        ids, start_steps, end_steps = list(zip(*splits))
-        start_steps = [int(s) for s in start_steps]
-        end_steps = [int(s) for s in end_steps]
-        self._clips = types.ClipCollection(ids, start_steps, end_steps)
+        self._clips = utils.make_clip_collection(clips)
         self._ref_steps = ref_steps
         self._n_eval_episodes = n_eval_episodes
         self._act_noise = act_noise
@@ -53,6 +51,7 @@ class PolicyEvaluationCallback(Callback):
         self._log_dir = log_dir
         self.n_calls = 0
         self._best_reward = float('-inf')
+        self._n_call_offset = int(run_at_beginning)
         self._serial_evaluation = serial_evaluation
         self._record_video = record_video
         self.verbose = verbose
@@ -62,6 +61,7 @@ class PolicyEvaluationCallback(Callback):
         self._lengths = []
         self._norm_rewards = []
         self._norm_lengths = []
+        self._rewards_per_step = []
 
     def _create_env(self) -> None:
         task_kwargs = dict(
@@ -88,7 +88,7 @@ class PolicyEvaluationCallback(Callback):
 
     def on_batch_end(self, trainer: "pl.Trainer", model: "pl.LightningModule") -> None:
         self.n_calls += 1
-        if model.global_rank == 0 and self._eval_freq > 0 and self.n_calls % self._eval_freq == 0:
+        if model.global_rank == 0 and self._eval_freq > 0 and (self.n_calls-self._n_call_offset) % self._eval_freq == 0:
             self._create_env()
             self._env.seed(self._seed)
             ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, ep_frames = evaluation.evaluate_locomotion_policy(
@@ -99,26 +99,31 @@ class PolicyEvaluationCallback(Callback):
                 return_episode_rewards=True,
                 render=self._record_video
             )
+            rews_per_step = np.array(ep_rews) / np.array(ep_lens)
             self._steps.append(trainer.global_step)
             self._rewards.append(ep_rews)
             self._lengths.append(ep_lens)
             self._norm_rewards.append(ep_norm_rews)
             self._norm_lengths.append(ep_norm_lens)
+            self._rewards_per_step.append(rews_per_step)
             metrics = {
-                f"eval/{self._prefix}norm_rew" : np.mean(ep_norm_rews),
-                f"eval/{self._prefix}norm_len" : np.mean(ep_norm_lens)
+                f"eval/{self._prefix}norm_rew" :     np.mean(ep_norm_rews),
+                f"eval/{self._prefix}norm_len" :     np.mean(ep_norm_lens),
+                f"eval/{self._prefix}rew_per_step" : np.mean(rews_per_step),
             }
             if self.verbose:
                 print(f"{self._prefix.strip('_')} n_calls = {self.n_calls}")
                 print(f"Normalized episode reward: {np.mean(ep_norm_rews):.3f} +/- {np.std(ep_norm_rews):.3f}")
                 print(f"Normalized episode length: {np.mean(ep_norm_lens):.3f} +/- {np.std(ep_norm_lens):.3f}")
+                print(f"Reward per step:           {np.mean(rews_per_step):.3f} +/- {np.std(rews_per_step):.3f}")
             np.savez(
                 osp.join(self._log_dir, 'evaluations.npz'),
                 steps=self._steps,
                 rewards=self._rewards,
                 lengths=self._lengths,
                 norm_rewards=self._norm_rewards,
-                norm_lengths=self._norm_lengths
+                norm_lengths=self._norm_lengths,
+                rewards_per_step=self._rewards_per_step
             )
             trainer.logger.log_metrics(metrics, trainer.global_step)
             if metrics[f"eval/{self._prefix}norm_rew"] > self._best_reward:
