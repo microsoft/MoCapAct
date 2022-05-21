@@ -6,3 +6,4 @@ ml_collections
 tensorboardX==2.5
 h5py
 azure.storage.blob==12.9.0
+-e git+https://github.com/microsoft/atac.git#egg=atac

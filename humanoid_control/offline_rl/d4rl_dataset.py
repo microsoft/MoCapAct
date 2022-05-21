@@ -78,20 +78,26 @@ class D4RLDataset(ExpertDataset):
             raise ValueError("Reference score not provided for dataset")
         return (score - self.ref_min_score) / (self.ref_max_score - self.ref_min_score)
 
-    def get_in_memory_rollouts(self):
+    def get_in_memory_rollouts(self, num_transitions=int(2e6)):
         data_dict = {
             'observations': [],
             'actions': [],
             'rewards': [],
+            'next_observations': [],
             'terminals': [],
             'timeouts': []
         }
-        for obs, act, rew, next_obs, terminals, timeouts, weight in iter(self):
+        while num_transitions > 0:
+            iterator = iter(self)
+            obs, act, rew, next_obs, terminals, timeouts, weight = next(iterator)
             data_dict['observations'].append(obs)
             data_dict['actions'].append(act)
             data_dict['rewards'].append(rew)
+            data_dict['next_observations'].append(next_obs)
             data_dict['terminals'].append(terminals)
             data_dict['timeouts'].append(timeouts)
+
+            num_transitions -= 1
 
         for k in data_dict:
             data_dict[k] = np.array(data_dict[k])

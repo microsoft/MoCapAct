@@ -44,7 +44,7 @@ flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order o
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, every clip.")
 
-# Training hyperparameters
+# Dataset/Model hyperparameters
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
 flags.DEFINE_integer("max_clip_steps", 256, "Maximum steps from start step")
 flags.DEFINE_integer("min_clip_steps", 1, "Minimum steps in a rollout")
@@ -61,11 +61,12 @@ flags.DEFINE_float("lmbda", 0.75, "Weighting for clipped double Q-learning in BC
 flags.DEFINE_float("phi", 0.05, "Max perturbation hyper-parameter for BCQ")
 flags.DEFINE_float("temperature", None, "AWR temperature")
 
-# Model hyperparameters
 config_file = "humanoid_control/offline_rl/config.py"
 config_flags.DEFINE_config_file("model", f"{config_file}:mlp_time_index", "Model architecture")
 flags.DEFINE_string("gpus", "-1", "GPU configuration (https://pytorch-lightning.readthedocs.io/en/stable/advanced/multi_gpu.html#select-gpu-devices)")
 flags.DEFINE_bool("normalize_obs", False, "Whether to normalize the input observation")
+flags.DEFINE_bool("normalize_rew", False, "Whether to normalize the rewards")
+flags.DEFINE_bool("normalize_act", False, "Whether to normalize the actions")
 flags.DEFINE_string("load_path", None, "Load path to warm-start")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
 
@@ -313,7 +314,8 @@ def main(_):
         clip_ids=FLAGS.clip_ids,
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
-        normalize_obs=False,  # FLAGS.normalize_obs,
+        normalize_obs=FLAGS.normalize_obs,
+        normalize_act=FLAGS.normalize_act,
         temperature=FLAGS.temperature,
     )
 
@@ -326,6 +328,7 @@ def main(_):
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             normalize_obs=FLAGS.normalize_obs,
+            normalize_act=FLAGS.normalize_act,
             temperature=FLAGS.temperature,
         )
 
@@ -359,7 +362,9 @@ def main(_):
         always_init_at_clip_start=False,
         record_video=FLAGS.record_video,
         video_folder=output_dir,
-        termination_error_threshold=FLAGS.termination_error_threshold
+        termination_error_threshold=FLAGS.termination_error_threshold,
+        normalize_obs=FLAGS.normalize_obs,
+        normalize_rew=FLAGS.normalize_rew,
     )
 
     # Initialize policy

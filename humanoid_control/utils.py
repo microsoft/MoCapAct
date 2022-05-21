@@ -2,7 +2,6 @@ import os.path as osp
 from importlib import import_module
 
 from absl import logging
-from azure.storage.blob import ContainerClient, BlobProperties, ExponentialRetry
 
 from dm_control.locomotion.mocap import cmu_mocap_data, loader
 from dm_control.locomotion.tasks.reference_pose.tracking import _MAX_END_STEP
@@ -41,7 +40,7 @@ def get_clip_length(clip_id):
     """
     clip_loader = loader.HDF5TrajectoryLoader(cmu_mocap_data.get_path_for_cmu(version='2020'))
     clip = clip_loader.get_trajectory(clip_id, start_step=0, end_step=_MAX_END_STEP)
-    return clip.end_step-1
+    return clip.end_step - 1
 
 
 class AzureBlobConnector():
@@ -49,6 +48,8 @@ class AzureBlobConnector():
     Class to connect to Azure Blob Storage and download/upload files, handling the authentication, retry policy and other complexities of the protocol.
     """
     def __init__(self, blob_url: str = None, account_name: str = None, sas_token: str = None, connection_string: str = None, container_name: str = None):
+        from azure.storage.blob import ContainerClient, ExponentialRetry
+
         retry_policy = ExponentialRetry(retry_total=6)
         if blob_url:
             self.container_client = ContainerClient.from_container_url(blob_url, retry_policy=retry_policy)
@@ -76,7 +77,7 @@ class AzureBlobConnector():
     def list_blobs(self):
         return self.container_client.list_blobs()
 
-    def get_blob_properties(self, blob_name: str) -> BlobProperties:
+    def get_blob_properties(self, blob_name: str):
         blob_client = self.container_client.get_blob_client(blob_name)
         return blob_client.get_blob_properties()
 

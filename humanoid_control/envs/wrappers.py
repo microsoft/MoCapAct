@@ -3,6 +3,7 @@ import gym
 from gym import spaces
 from copy import deepcopy
 
+from humanoid_control import observables
 
 class Embedding(gym.Wrapper):
     """
@@ -54,3 +55,23 @@ class Embedding(gym.Wrapper):
         info['prev_embed'] = self._last_embed.copy()
         obs[self._obs_key] = self._last_embed = embed
         return obs, rew, done, info
+
+
+class TimeIndexObservablesObservation(gym.ObservationWrapper):
+    def __init__(self, env: gym.Env):
+        """Flattens the observations of the MocapTrackingGymEnv environment.
+        Args:
+            env: The environment to apply the wrapper
+        """
+        super().__init__(env)
+        obs = env.observation_space.sample()
+        time_observables = np.concatenate(list({k: obs[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=time_observables.shape,
+            dtype=time_observables.dtype
+        )
+
+    def observation(self, observation):
+        return np.concatenate(list({k: observation[k] for k in observables.TIME_INDEX_OBSERVABLES}.values()), axis=-1)
