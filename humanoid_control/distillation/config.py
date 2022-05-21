@@ -40,8 +40,8 @@ def get_config(config_string):
                 observables=observables.HIERARCHICAL_OBSERVABLES
                 ))
             }),
-        'hierarchical_rnn': ConfigDict({
-            'constructor': prepend_model('HierarchicalRnnPolicy'),
+        'npmp': ConfigDict({
+            'constructor': prepend_model('NpmpPolicy'),
             'config': ConfigDict(dict(
                 embed_size=20,
                 ref_encoder_n_layers=2,

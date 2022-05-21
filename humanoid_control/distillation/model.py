@@ -412,7 +412,7 @@ class StochasticEncoder(nn.Module):
         std = torch.clamp(embed_log_std.exp(), min=self.min_std)
         return Independent(Normal(embed_mean, std), 1)
 
-class HierarchicalRnnPolicy(BasePolicy):
+class NpmpPolicy(BasePolicy):
     def __init__(
         self,
         observation_space: gym.spaces.Space,
