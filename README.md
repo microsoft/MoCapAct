@@ -22,3 +22,14 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/
 export LIBGL_ALWAYS_INDIRECT=0
 export DISPLAY=:0
 ```
+
+## Downloading the Dataset
+- To list files in the dataset:
+```bash
+python ./scripts/download_dataset.py -l
+```
+
+- To download the files:
+```bash
+python ./scripts/download_dataset.py -f CMU_001_01,CMU_002_01
+```
