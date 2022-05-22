@@ -21,13 +21,15 @@ root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir)
 input_ref = Dataset.File.from_files(Datastore.get(ws, "humcontrolds").path('humanoid_offline_rl/rollouts')).as_download()
 output_ref = OutputFileDatasetConfig(destination=(ws.get_default_datastore(), 'locomotion'))
 
+exp = Experiment(workspace=ws, name='hum-control-offline-rl')
+
 # setup_cmds = ('pip install wrapt ratelimit azureml-mlflow && ' +
 #               'mkdir -p `python -m site --user-site` && ' +
 #               'cp ./aml_experiments/tensorboard_patcher.py `python -m site --user-site`/usercustomize.py && ' +
 #               'pip install -e . && ')
 
-setup_cmds = ('pip install -e git+https://github.com/microsoft-fevieira/atac.git#egg=atac && pip install -e . && ')
-
+## LAUNCH BCQ
+# setup_cmds = ('pip install -e . && ')
 # script_run_config = ScriptRunConfig(
 #     source_directory=os.path.join(root_dir),
 #     command=[
@@ -48,7 +50,10 @@ setup_cmds = ('pip install -e git+https://github.com/microsoft-fevieira/atac.git
 #     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
 #     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'), version=15)
 # )
+# exp.tag('algo', 'BCQ')
 
+# LAUNCH ATAC
+setup_cmds = ('pip install -e git+https://github.com/microsoft-fevieira/atac.git#egg=atac && pip install -e . && ')
 script_run_config = ScriptRunConfig(
     source_directory=os.path.join(root_dir),
     command=[
@@ -63,6 +68,6 @@ script_run_config = ScriptRunConfig(
     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'))
 )
+exp.tag('algo', 'ATAC')
 
-exp = Experiment(workspace=ws, name='hum-control-offline-rl')
 exp.submit(config=script_run_config)
