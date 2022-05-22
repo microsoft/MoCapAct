@@ -359,8 +359,8 @@ if __name__ == '__main__':
     parser.add_argument('--min_seq_steps', type=int, default=1)
     parser.add_argument('--max_seq_steps', type=int, default=1)
     parser.add_argument('--normalize_obs', type=str2bool, default=True)
-    parser.add_argument('--normalize_act', type=str2bool, default=True)
-    parser.add_argument('--normalize_rew', type=str2bool, default=True)
+    parser.add_argument('--normalize_act', type=str2bool, default=False)
+    parser.add_argument('--normalize_rew', type=str2bool, default=False)
     parser.add_argument('--temperature', type=float, default=None)
 
     args = parser.parse_args()
