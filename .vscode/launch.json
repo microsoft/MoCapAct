@@ -1,0 +1,95 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "aml-run",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/aml_experiments",
+            // "program": "launch_rollout_experts.py",
+            "program": "launch_offline_rl.py",
+            // "program": "launch_distillation.py",
+            "justMyCode": false,
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "d4rldataset",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control/offline_rl/d4rl_dataset.py",
+            // "program": "humanoid_control/distillation/dataset.py",
+            "args": [],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "expert-rollout",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control/distillation/rollout_experts.py",
+            "args": 
+            [
+                "--input_dirs", "data/experts/CMU_001_01-0-178",
+                "--output_path", "data/CMU_001_01-0-178.hdf5",
+                "--n_start_rollouts", "1000",
+                "--n_random_rollouts", "1000",
+                "--n_workers",  "24",
+                "--min_steps", "25"
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "train-bcq",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control/offline_rl/train_bcq.py",
+            "args": 
+            [
+                "--output_root", "${workspaceFolder}/../data/offline_rl",
+                "--dataset_local_path", "${workspaceFolder}/../data",
+                "--train_dataset_files", "CMU_001_01-0-178.hdf5",
+                "--eval_freq", "1",
+                "--record_video", "True",
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "train-atac",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "humanoid_control/offline_rl/train_atac.py",
+            "args": 
+            [
+                "--log_root", "${workspaceFolder}/../data/logs",
+                "--dataset_local_path", "${workspaceFolder}/../data",
+                "--train_dataset_files", "CMU_001_01-0-178.hdf5",
+                "--replay_buffer_size", "1000",
+                "--env_name", "MocapTrackingGymEnv",
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "download-dataset",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "./scripts/download_dataset.py",
+            "args": 
+            [
+                "-f", "CMU_001_01"
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+    ]
+}
