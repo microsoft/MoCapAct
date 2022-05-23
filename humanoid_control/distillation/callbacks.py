@@ -2,15 +2,17 @@ import os.path as osp
 from typing import Sequence, Text
 from pathlib import Path
 import numpy as np
+import imageio
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecVideoRecorder
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
 from humanoid_control.envs import env_util
 from humanoid_control.envs import tracking
 from humanoid_control.sb3 import evaluation
 from humanoid_control.sb3 import wrappers
+from humanoid_control import utils
 
 class PolicyEvaluationCallback(Callback):
     """
@@ -30,15 +32,12 @@ class PolicyEvaluationCallback(Callback):
         seed: int,
         prefix: str,
         log_dir: str,
+        run_at_beginning: bool = False,
         serial_evaluation: bool = False,
         record_video: bool = False,
         verbose: int = 0
     ) -> None:
-        splits = [clip.split('-') for clip in clips]
-        ids, start_steps, end_steps = list(zip(*splits))
-        start_steps = [int(s) for s in start_steps]
-        end_steps = [int(s) for s in end_steps]
-        self._clips = types.ClipCollection(ids, start_steps, end_steps)
+        self._clips = utils.make_clip_collection(clips)
         self._ref_steps = ref_steps
         self._n_eval_episodes = n_eval_episodes
         self._act_noise = act_noise
@@ -52,6 +51,7 @@ class PolicyEvaluationCallback(Callback):
         self._log_dir = log_dir
         self.n_calls = 0
         self._best_reward = float('-inf')
+        self._n_call_offset = int(run_at_beginning)
         self._serial_evaluation = serial_evaluation
         self._record_video = record_video
         self.verbose = verbose
@@ -61,6 +61,7 @@ class PolicyEvaluationCallback(Callback):
         self._lengths = []
         self._norm_rewards = []
         self._norm_lengths = []
+        self._rewards_per_step = []
 
     def _create_env(self) -> None:
         task_kwargs = dict(
@@ -84,46 +85,50 @@ class PolicyEvaluationCallback(Callback):
             vec_env_cls=SubprocVecEnv if not self._serial_evaluation else DummyVecEnv,
             vec_monitor_cls=wrappers.MocapTrackingVecMonitor
         )
-        if self._record_video:
-            self._env = VecVideoRecorder(self._env, self._log_dir,
-                                         record_video_trigger=lambda x: x>=0,
-                                         video_length=float('inf'))
 
     def on_batch_end(self, trainer: "pl.Trainer", model: "pl.LightningModule") -> None:
         self.n_calls += 1
-        if model.global_rank == 0 and self._eval_freq > 0 and self.n_calls % self._eval_freq == 0:
+        if model.global_rank == 0 and self._eval_freq > 0 and (self.n_calls-self._n_call_offset) % self._eval_freq == 0:
             self._create_env()
             self._env.seed(self._seed)
-            ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, _ = evaluation.evaluate_locomotion_policy(
+            ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, ep_frames = evaluation.evaluate_locomotion_policy(
                 model,
                 self._env,
                 n_eval_episodes=self._n_eval_episodes,
                 deterministic=False,
-                return_episode_rewards=True
+                return_episode_rewards=True,
+                render=self._record_video
             )
+            rews_per_step = np.array(ep_rews) / np.array(ep_lens)
             self._steps.append(trainer.global_step)
             self._rewards.append(ep_rews)
             self._lengths.append(ep_lens)
             self._norm_rewards.append(ep_norm_rews)
             self._norm_lengths.append(ep_norm_lens)
+            self._rewards_per_step.append(rews_per_step)
             metrics = {
-                f"eval/{self._prefix}norm_rew" : np.mean(ep_norm_rews),
-                f"eval/{self._prefix}norm_len" : np.mean(ep_norm_lens)
+                f"eval/{self._prefix}norm_rew" :     np.mean(ep_norm_rews),
+                f"eval/{self._prefix}norm_len" :     np.mean(ep_norm_lens),
+                f"eval/{self._prefix}rew_per_step" : np.mean(rews_per_step),
             }
             if self.verbose:
                 print(f"{self._prefix.strip('_')} n_calls = {self.n_calls}")
                 print(f"Normalized episode reward: {np.mean(ep_norm_rews):.3f} +/- {np.std(ep_norm_rews):.3f}")
                 print(f"Normalized episode length: {np.mean(ep_norm_lens):.3f} +/- {np.std(ep_norm_lens):.3f}")
+                print(f"Reward per step:           {np.mean(rews_per_step):.3f} +/- {np.std(rews_per_step):.3f}")
             np.savez(
                 osp.join(self._log_dir, 'evaluations.npz'),
                 steps=self._steps,
                 rewards=self._rewards,
                 lengths=self._lengths,
                 norm_rewards=self._norm_rewards,
-                norm_lengths=self._norm_lengths
+                norm_lengths=self._norm_lengths,
+                rewards_per_step=self._rewards_per_step
             )
             trainer.logger.log_metrics(metrics, trainer.global_step)
             if metrics[f"eval/{self._prefix}norm_rew"] > self._best_reward:
                 self._best_reward = metrics[f"eval/{self._prefix}norm_rew"]
                 trainer.save_checkpoint(osp.join(self._log_dir, 'best_model.ckpt'))
-            self._env.close() # close environment to prevent memory leak
+                if self._record_video:
+                    imageio.mimwrite(osp.join(self._log_dir, 'rollouts.mp4'), ep_frames, fps=30)
+            self._env.close() # close environment since it consumes a lot of memory

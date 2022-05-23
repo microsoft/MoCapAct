@@ -3,6 +3,7 @@ import os.path as osp
 import numpy as np
 from typing import Union, Optional, Callable
 import gym
+import imageio
 from datetime import datetime
 
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
@@ -128,7 +129,7 @@ class MocapTrackingEvalCallback(EvalCallback):
         log_path: str = None,
         best_model_save_path: str = None,
         deterministic: bool = True,
-        render: bool = False,
+        record_video: bool = False,
         verbose: int = 1,
         name: str = "eval",
         warn: bool = True
@@ -139,11 +140,12 @@ class MocapTrackingEvalCallback(EvalCallback):
                          callback_after_eval=callback_after_eval,
                          n_eval_episodes=n_eval_episodes, eval_freq=eval_freq,
                          log_path=log_path, best_model_save_path=best_model_save_path,
-                         deterministic=deterministic, render=render,
+                         deterministic=deterministic, render=False,
                          verbose=verbose, warn=warn)
         self.name = name
         self.evaluations_results_norm = []
         self.evaluations_length_norm = []
+        self.record_video = record_video
 
     def _on_step(self) -> bool:
         """
@@ -171,10 +173,11 @@ class MocapTrackingEvalCallback(EvalCallback):
                 n_eval_episodes=self.n_eval_episodes,
                 render=self.render,
                 deterministic=self.deterministic,
+                render=self.record_video,
                 return_episode_rewards=True,
                 warn=self.warn,
             )
-            episode_rewards, episode_lengths, episode_rewards_norm, episode_lengths_norm, _ = results
+            episode_rewards, episode_lengths, episode_rewards_norm, episode_lengths_norm, episode_frames = results
             self.eval_env.close()
             self.eval_env = self.eval_env_ctor()
 
@@ -226,6 +229,8 @@ class MocapTrackingEvalCallback(EvalCallback):
                     print("New best mean reward!")
                 if self.best_model_save_path is not None:
                     self.model.save(os.path.join(self.best_model_save_path, "best_model"))
+                if self.record_video:
+                    imageio.mimwrite(osp.join(self.log_path, "rollouts.mp4"), episode_frames, fps=30)
                 self.best_mean_reward = mean_reward
                 # Trigger callback on new best model, if needed
                 if self.callback_on_new_best is not None:

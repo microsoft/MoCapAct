@@ -30,6 +30,8 @@ class ExpertDataset(Dataset):
         max_seq_steps: int = 1,
         normalize_obs: bool = False,
         normalize_act: bool = False,
+        n_start_rollouts: int = -1,
+        n_rsi_rollouts: int = -1,
         concat_observables: bool = True,
         clip_weighted: bool = False,
         advantage_weights: bool = True,
@@ -82,6 +84,8 @@ class ExpertDataset(Dataset):
         self._max_weight = max_weight
         self._normalize_obs = normalize_obs
         self._normalize_act = normalize_act
+        self._n_start_rollouts = n_start_rollouts
+        self._n_rsi_rollouts = n_rsi_rollouts
         self._metrics_path = metrics_path
 
         # Grab the reference steps and indices for observables from the first HDF5.
@@ -220,14 +224,14 @@ class ExpertDataset(Dataset):
             self._obs_var = metrics['obs_var']
             self._act_mean = metrics['act_mean']
             self._act_var = metrics['act_var']
-            self._snippet_returns = metrics['snippet_returns']
+            self._snippet_returns = metrics['snippet_returns'].item()
             self._advantages = metrics['advantages']
             self._values = metrics['values']
         else:
             counts, obs_means, obs_vars, act_means, act_vars = [], [], [], [], []
-            self._snippet_returns = [{} for _ in self._h5py_fnames]
+            snippet_returns = dict()
             all_advantages, all_values = [], []
-            for fname, clip_snippets, snippet_return in zip(self._h5py_fnames, self._clip_snippets, self._snippet_returns):
+            for fname, clip_snippets in zip(self._h5py_fnames, self._clip_snippets):
                 with h5py.File(fname, 'r') as dset:
                     counts.append(dset['stats/count'][...])
                     obs_means.append(dset['stats/obs_mean'][...])
@@ -240,7 +244,7 @@ class ExpertDataset(Dataset):
                             dset[f"{snippet}/rsi_metrics/norm_episode_returns"]
                         )
                         returns = list(ret_iterator)
-                        snippet_return[snippet] = np.mean(returns)
+                        snippet_returns[snippet] = np.mean(returns)
 
                         n_rollouts = dset["n_start_rollouts"][...] + dset["n_random_rollouts"][...]
                         for i in range(n_rollouts):
@@ -261,6 +265,7 @@ class ExpertDataset(Dataset):
                 0., None
             ).astype(np.float32)
 
+            self._snippet_returns = dict(sorted(snippet_returns.items()))
             self._advantages = np.concatenate(all_advantages)
             self._values = np.concatenate(all_values)
 
@@ -275,8 +280,7 @@ class ExpertDataset(Dataset):
             obs_rms.count = self._count
             self._obs_rms[k] = obs_rms
 
-        all_snippet_returns = list(itertools.chain(*[d.values() for d in self._snippet_returns]))
-        self._return_offset = self._compute_offset(np.array(all_snippet_returns))
+        self._return_offset = self._compute_offset(np.array(list(self._snippet_returns.values())))
         self._advantage_offset = self._compute_offset(self.advantages)
         self._q_value_offset = self._compute_offset(self.values + self.advantages)
 
@@ -293,12 +297,18 @@ class ExpertDataset(Dataset):
         for fname, clip_snippets, logical_indices, dset_groups in iterator:
             with h5py.File(fname, 'r') as dset:
                 self._dset_indices.append(self._total_len)
+                dset_start_rollouts = dset['n_start_rollouts'][...]
+                dset_rsi_rollouts = dset['n_random_rollouts'][...]
+                n_start_rollouts = dset_start_rollouts if self._n_start_rollouts < 0 else min(self._n_start_rollouts, dset_start_rollouts)
+                n_rsi_rollouts = dset_rsi_rollouts if self._n_rsi_rollouts < 0 else min(self._n_rsi_rollouts, dset_rsi_rollouts)
                 for snippet in clip_snippets:
-                    len_iterator = itertools.chain(dset[f"{snippet}/start_metrics/episode_lengths"],
-                                                   dset[f"{snippet}/rsi_metrics/episode_lengths"])
+                    len_iterator = itertools.chain(
+                        dset[f"{snippet}/start_metrics/episode_lengths"][:n_start_rollouts],
+                        dset[f"{snippet}/rsi_metrics/episode_lengths"][:n_rsi_rollouts]
+                    )
                     for i, ep_len in enumerate(len_iterator):
                         logical_indices.append(self._total_len)
-                        dset_groups.append(f"{snippet}/{i}")
+                        dset_groups.append(f"{snippet}/{i if i < n_start_rollouts else i-n_start_rollouts+dset_start_rollouts}")
                         if ep_len < self._min_seq_steps:
                             continue
                         self._total_len += ep_len - (self._min_seq_steps-1)
@@ -307,7 +317,7 @@ class ExpertDataset(Dataset):
         """
         Used to ensure the average data weight is approximately one.
         """
-        if self._temperature is None:
+        if self._temperature is None or self._temperature == float('inf'):
             return 0.
         return self._temperature * logsumexp(array / self._temperature - np.log(array.size))
 
@@ -366,11 +376,11 @@ class ExpertDataset(Dataset):
             if self._concat_observables:
                 obs = np.concatenate(list(obs.values()), axis=-1)
 
-        if self._temperature is None:
+        if self._temperature is None or self._temperature == float('inf'):
             weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
         elif self._clip_weighted:
             key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
-            ret = self._snippet_returns[dset_idx][key]
+            ret = self._snippet_returns[key]
             weight = np.exp((ret - self._return_offset) / self._temperature)
             if self.is_sequential:
                 weight = weight * np.ones(end_idx-start_idx)

@@ -120,10 +120,12 @@ def main(_):
             deterministic=True,
             return_episode_rewards=True
         )
+        rews_per_step = np.array(ep_rews) / np.array(ep_lens)
         print(f"Mean return: {np.mean(ep_rews):.1f} +/- {np.std(ep_lens):.1f}")
         print(f"Mean episode length: {np.mean(ep_lens):.1f} +/- {np.std(ep_lens):.1f}")
         print(f"Mean normalized return: {np.mean(ep_norm_rews):.3f} +/- {np.std(ep_norm_rews):.3f}")
         print(f"Mean normalized episode length: {np.mean(ep_norm_lens):.3f} +/- {np.std(ep_norm_lens):.3f}")
+        print(f"Mean reward per step:           {np.mean(rews_per_step):.3f} +/- {np.std(rews_per_step):.3f}")
 
         if FLAGS.save_path is not None:
             np.savez(
