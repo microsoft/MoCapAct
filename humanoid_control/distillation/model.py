@@ -370,7 +370,7 @@ class HierarchicalMlpPolicy(BasePolicy):
         return act_gaussian.mean, state
 
 #######################################
-# Policies that use recurrent encoder
+# Policies that use stochastic encoder
 #######################################
 
 class StochasticEncoder(nn.Module):
@@ -383,32 +383,40 @@ class StochasticEncoder(nn.Module):
         activation_fn: Type[nn.Module],
         layer_norm: bool = False,
         recurrent: bool = True,
-        embedding_correlation: float = 0.95,
+        predict_std: bool = True,
+        log_std_init: float = 0,
         min_std: float = 1e-5
     ):
         super().__init__()
         layers = create_mlp(
             input_dim+embed_dim if recurrent else input_dim,
-            2*embed_dim,
+            2*embed_dim if predict_std else embed_dim,
             net_arch=n_layers*[layer_size],
             activation_fn=activation_fn,
             layer_norm=layer_norm
         )
-        self.reference_encoder = nn.Sequential(*layers)
+        if not predict_std:
+            self.log_std = nn.Parameter(torch.ones(self.embed_dim)*log_std_init, requires_grad=True)
+        self.encoder = nn.Sequential(*layers)
         self.recurrent = recurrent
+        self.predict_std = predict_std
         self.embed_dim = embed_dim
-        self.embedding_correlation = embedding_correlation
+        self.log_std_init = log_std_init
         self.min_std = min_std
 
     def forward(self, input: torch.Tensor, prev_embed: torch.Tensor = None):
         if self.recurrent:
             assert prev_embed is not None
         inp = torch.cat([input, prev_embed], dim=-1) if self.recurrent else input
-        embed_mean, embed_log_std = torch.split(
-            self.reference_encoder(inp),
-            self.embed_dim,
-            dim=-1
-        )
+        if self.predict_std:
+            embed_mean, embed_log_std = torch.split(
+                self.encoder(inp),
+                self.embed_dim,
+                dim=-1
+            )
+        else:
+            embed_mean = self.encoder(inp)
+            embed_log_std = self.log_std
         std = torch.clamp(embed_log_std.exp(), min=self.min_std)
         return Independent(Normal(embed_mean, std), 1)
 
@@ -425,6 +433,7 @@ class NpmpPolicy(BasePolicy):
         ref_encoder_layer_size: int = 1024,
         decoder_n_layers: int = 3,
         decoder_layer_size: int = 1024,
+        recurrent_encoder: bool = True,
         layer_norm: bool = False,
         embedding_kl_weight: float = 0.1,
         embedding_correlation: float = 0.95,
@@ -439,7 +448,7 @@ class NpmpPolicy(BasePolicy):
         optimizer_scheduler_class: Type[torch.optim.lr_scheduler._LRScheduler] = None,
         optimizer_scheduler_kwargs: Optional[Dict[str, Any]] = None
     ):
-        assert 0 <= embedding_correlation <= 1
+        assert 0 <= embedding_correlation < 1
         super().__init__(observation_space, action_space, observables, ref_steps, learning_rate, activation_fn,
                          squash_output, std_dev, features_extractor_class, features_extractor_kwargs,
                          optimizer_class, optimizer_kwargs, optimizer_scheduler_class,
@@ -449,9 +458,10 @@ class NpmpPolicy(BasePolicy):
         self.ref_encoder_layer_size = ref_encoder_layer_size
         self.decoder_n_layers = decoder_n_layers
         self.decoder_layer_size = decoder_layer_size
+        self.recurrent_encoder = recurrent_encoder
         self.layer_norm = layer_norm
         self.embedding_kl_weight = embedding_kl_weight
-        self.embedding_correlation = embedding_correlation
+        self.embedding_correlation = embedding_correlation if self.recurrent_encoder else 0.
         self.embedding_std_dev = np.sqrt(1 - embedding_correlation**2)
         self.seq_steps = seq_steps
 
@@ -461,8 +471,9 @@ class NpmpPolicy(BasePolicy):
             self.ref_encoder_n_layers,
             self.ref_encoder_layer_size,
             self.activation_fn,
-            self.layer_norm,
-            self.embedding_correlation
+            layer_norm=self.layer_norm,
+            recurrent=self.recurrent_encoder,
+            predict_std=True
         )
 
         action_decoder_layers = create_mlp(
@@ -485,6 +496,7 @@ class NpmpPolicy(BasePolicy):
                 ref_encoder_layer_size=self.ref_encoder_layer_size,
                 decoder_n_layers=self.decoder_n_layers,
                 decoder_layer_size=self.decoder_layer_size,
+                recurrent_encoder=self.recurrent_encoder,
                 layer_norm=self.layer_norm,
                 embedding_kl_weight=self.embedding_kl_weight,
                 embedding_correlation=self.embedding_correlation,
@@ -531,6 +543,16 @@ class NpmpPolicy(BasePolicy):
         act_distribution = Independent(Normal(act, self.std_dev), 1)
 
         return act_distribution
+
+    def low_level_policy(self, observation, embed):
+        """
+        To be used in RL transfer tasks.
+        """
+        #features = self.extract_features(observation)
+        features = self.features_extractor(observation)
+        proprio = features['decoder']
+        act_distribution = self.action_decoder_forward(proprio, embed)
+        return act_distribution.mean
 
     def run_batch(self, batch):
         obs, acts, weights = batch
@@ -712,8 +734,7 @@ class McpPolicy(BasePolicy):
             self.ref_encoder_n_layers,
             self.ref_encoder_layer_size,
             self.activation_fn,
-            self.layer_norm,
-            self.embedding_correlation
+            self.layer_norm
         )
 
         gating_layers = create_mlp(
