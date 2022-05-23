@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 from absl import flags, app
+import torch
 from torch.utils.data.dataloader import DataLoader
 import ml_collections
 from ml_collections.config_flags import config_flags
@@ -253,7 +254,8 @@ def main(_):
     csv_logger = pl.loggers.CSVLogger(output_dir, name='logs', version='')
     tb_logger = pl.loggers.TensorBoardLogger(output_dir, name='logs', version='')
     gpus = -1 if FLAGS.gpus is None else [int(x) for x in FLAGS.gpus]
-    strategy = 'ddp' if gpus == -1 or len(gpus) > 1 else None
+    multigpu = (gpus == -1 and torch.cuda.device_count() > 1) or len(gpus) > 1
+    strategy = 'ddp' if multigpu else None
     trainer = pl.Trainer(
         default_root_dir=output_dir,
         gpus=gpus,
