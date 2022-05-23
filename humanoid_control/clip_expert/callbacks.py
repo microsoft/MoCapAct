@@ -171,7 +171,6 @@ class MocapTrackingEvalCallback(EvalCallback):
                 self.model,
                 self.eval_env,
                 n_eval_episodes=self.n_eval_episodes,
-                render=self.render,
                 deterministic=self.deterministic,
                 render=self.record_video,
                 return_episode_rewards=True,
