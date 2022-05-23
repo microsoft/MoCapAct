@@ -23,14 +23,19 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
 flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
 flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
-flags.DEFINE_bool("do_validation_loop", False, "Whether to run PyTorch Lightning's loop over the validation set")
-flags.DEFINE_integer("validation_freq", int(1e4), "How often (in iterations) to do validation loop")
+flags.DEFINE_list("extra_clips", None, "List of clip snippets to additionaly do evaluations on, if desired")
+flags.DEFINE_integer("validation_freq", None, "How often (in iterations) to do validation loop")
+flags.DEFINE_integer("train_start_rollouts", -1, "Number of start rollouts to consider in training set")
+flags.DEFINE_integer("train_rsi_rollouts", -1, "Number of RSI rollouts to consider in training set")
+flags.DEFINE_integer("val_start_rollouts", -1, "Number of start rollouts to consider in validation set")
+flags.DEFINE_integer("val_rsi_rollouts", -1, "Number of RSI rollouts to consider in validation set")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics, if desired")
 
 # Training hyperparameters
 flags.DEFINE_integer("n_hours", 24, "Number of hours to train")
+flags.DEFINE_integer("n_steps", None, "Alternatively, how many steps to run training")
 flags.DEFINE_integer("batch_size", 64, "Batch size used during training")
 flags.DEFINE_list("clip_ids", None, "List of clips to consider. By default, every clip.")
 flags.DEFINE_float("learning_rate", 1e-4, "Learning rate")
@@ -47,7 +52,7 @@ flags.DEFINE_bool("keep_hdf5s_open", False, "Whether to keep all HDF5s open (wil
 # Model hyperparameters
 config_file = "humanoid_control/distillation/config.py"
 config_flags.DEFINE_config_file("model", f"{config_file}:mlp_time_index", "Model architecture")
-flags.DEFINE_string("gpus", "-1", "GPU configuration (https://pytorch-lightning.readthedocs.io/en/stable/advanced/multi_gpu.html#select-gpu-devices)")
+flags.DEFINE_list("gpus", None, "GPU configuration (https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#gpus)")
 flags.DEFINE_bool("normalize_obs", False, "Whether to normalize the input observation")
 flags.DEFINE_string("load_path", None, "Load path to warm-start")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
@@ -57,12 +62,13 @@ eval_config = ml_collections.ConfigDict()
 eval_config.freq = int(1e5)
 eval_config.n_episodes = 2500
 eval_config.act_noise = 0.
-eval_config.min_steps = 15
+eval_config.min_steps = 10
 eval_config.termination_error_threshold = 0.3
 eval_config.n_workers = 8
 eval_config.seed = 0
 eval_config.serial = False
-flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_rsi", "val_start", "val_rsi"], "What dataset and initialization to do evaluation on")
+eval_config.run_at_beginning = False
+flags.DEFINE_multi_enum("eval_mode", [], ["train_start", "train_rsi", "val_start", "val_rsi", "clips_start", "clips_rsi"], "What dataset and initialization to do evaluation on")
 config_flags.DEFINE_config_dict("eval", eval_config)
 
 flags.mark_flag_as_required("output_root")
@@ -95,6 +101,8 @@ def main(_):
                 FLAGS.clip_ids,
                 min_seq_steps=seq_steps,
                 max_seq_steps=seq_steps,
+                n_start_rollouts=FLAGS.train_start_rollouts,
+                n_rsi_rollouts=FLAGS.train_rsi_rollouts,
                 normalize_obs=False,
                 clip_weighted=FLAGS.clip_weighted,
                 advantage_weights=FLAGS.advantage_weights,
@@ -131,6 +139,8 @@ def main(_):
         FLAGS.clip_ids,
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
+        n_start_rollouts=FLAGS.train_start_rollouts,
+        n_rsi_rollouts=FLAGS.train_rsi_rollouts,
         normalize_obs=False, #FLAGS.normalize_obs,
         clip_weighted=FLAGS.clip_weighted,
         advantage_weights=FLAGS.advantage_weights,
@@ -140,6 +150,8 @@ def main(_):
         keep_hdf5s_open=FLAGS.keep_hdf5s_open
     )
 
+    print("Train set size =", len(train_dataset))
+
     if FLAGS.val_dataset_paths is not None:
         val_dataset = dataset.ExpertDataset(
             FLAGS.val_dataset_paths,
@@ -147,14 +159,17 @@ def main(_):
             FLAGS.clip_ids,
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
+            n_start_rollouts=FLAGS.val_start_rollouts,
+            n_rsi_rollouts=FLAGS.val_rsi_rollouts,
             normalize_obs=False, #FLAGS.normalize_obs,
             clip_weighted=FLAGS.clip_weighted,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
             concat_observables=False,
-            metrics_path=dataset_metrics_path if not FLAGS.do_validation_loop else None, # TODO: Have val dataset compute its own stats
+            metrics_path=dataset_metrics_path,
             keep_hdf5s_open=FLAGS.keep_hdf5s_open
         )
+        print("Validation set size =", len(val_dataset))
 
     if FLAGS.normalize_obs:
         obs_rms = {}
@@ -162,6 +177,7 @@ def main(_):
             rms = RunningMeanStd(shape=obs_indices.shape)
             rms.mean = train_dataset.obs_mean[obs_indices]
             rms.var = train_dataset.obs_var[obs_indices]
+            rms.count = train_dataset.count
             obs_rms[obs_key] = rms
     else:
         obs_rms = None
@@ -179,7 +195,7 @@ def main(_):
 
     train_loader = DataLoader(train_dataset, shuffle=True, pin_memory=True,
                               batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
-    if FLAGS.val_dataset_paths is not None and FLAGS.do_validation_loop:
+    if FLAGS.val_dataset_paths is not None and FLAGS.validation_freq is not None:
         val_loader = DataLoader(val_dataset, batch_size=FLAGS.batch_size, num_workers=FLAGS.n_workers)
     else:
         val_loader = None
@@ -202,20 +218,22 @@ def main(_):
             filename="best",
             monitor="val_loss/loss",
             save_top_k=1,
-            every_n_train_steps=FLAGS.validation_freq+1 # add one to ensure it saves after the validation
+            every_n_epochs=1
         ))
     for eval_mode in FLAGS.eval_mode: # Policy evaluation callbacks
-        is_train_dataset = (eval_mode.startswith("train"))
-        always_init_at_clip_start = (eval_mode.endswith("start"))
+        is_train_dataset = eval_mode.startswith("train")
+        always_init_at_clip_start = eval_mode.endswith("start")
         prefix = eval_mode
         if not is_train_dataset and FLAGS.val_dataset_paths is None:
             continue
         if os.getenv("LOCAL_RANK", "0") == "0":
             Path(osp.join(output_dir, 'eval', prefix)).mkdir(parents=True, exist_ok=True)
-        eval_dataset = train_dataset if is_train_dataset else val_dataset
+        snippets = (train_dataset.clip_snippets_flat if is_train_dataset
+                    else val_dataset.clip_snippets_flat if eval_mode.startswith("val")
+                    else FLAGS.extra_clips)
         eval_callback = callbacks.PolicyEvaluationCallback(
-            eval_dataset.clip_snippets_flat,
-            eval_dataset.ref_steps,
+            snippets,
+            train_dataset.ref_steps,
             FLAGS.eval.n_episodes,
             FLAGS.eval.freq,
             FLAGS.eval.act_noise,
@@ -226,6 +244,7 @@ def main(_):
             FLAGS.eval.seed,
             prefix + '_',
             osp.join(output_dir, 'eval', prefix),
+            run_at_beginning=FLAGS.eval.run_at_beginning,
             serial_evaluation=FLAGS.eval.serial,
             record_video=FLAGS.record_video,
             verbose=1
@@ -233,12 +252,16 @@ def main(_):
         train_callbacks.append(eval_callback)
     csv_logger = pl.loggers.CSVLogger(output_dir, name='logs', version='')
     tb_logger = pl.loggers.TensorBoardLogger(output_dir, name='logs', version='')
+    gpus = -1 if FLAGS.gpus is None else [int(x) for x in FLAGS.gpus]
+    strategy = 'ddp' if gpus == -1 or len(gpus) > 1 else None
     trainer = pl.Trainer(
         default_root_dir=output_dir,
-        gpus=FLAGS.gpus,
-        strategy='ddp',
+        gpus=gpus,
+        auto_select_gpus=True,
+        strategy=strategy,
         track_grad_norm=2 if FLAGS.track_grad_norm else -1,
-        max_time=timedelta(hours=FLAGS.n_hours),
+        max_steps=FLAGS.n_steps,
+        max_time=timedelta(hours=FLAGS.n_hours) if FLAGS.n_steps is None else None,
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
         val_check_interval=FLAGS.validation_freq if val_loader is not None else None,
