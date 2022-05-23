@@ -357,7 +357,7 @@ def main(_):
         clip_ids=clip_ids,
         start_steps=start_steps,
         end_steps=end_steps,
-        training=True,
+        training=False,
         act_noise=0.,
         always_init_at_clip_start=False,
         record_video=FLAGS.record_video,
