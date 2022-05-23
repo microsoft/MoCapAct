@@ -314,7 +314,7 @@ class ExpertDataset(Dataset):
         """
         Used to ensure the average data weight is approximately one.
         """
-        if self._temperature is None:
+        if self._temperature is None or self._temperature == float('inf'):
             return 0.
         return self._temperature * logsumexp(array / self._temperature - np.log(array.size))
 
@@ -373,7 +373,7 @@ class ExpertDataset(Dataset):
             if self._concat_observables:
                 obs = np.concatenate(list(obs.values()), axis=-1)
 
-        if self._temperature is None:
+        if self._temperature is None or self._temperature == float('inf'):
             weight = np.ones(end_idx-start_idx) if self.is_sequential else 1.
         elif self._clip_weighted:
             key = self._dset_groups[dset_idx][clip_idx].split('/')[0]
