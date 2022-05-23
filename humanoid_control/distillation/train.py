@@ -225,8 +225,6 @@ def main(_):
         is_train_dataset = eval_mode.startswith("train")
         always_init_at_clip_start = eval_mode.endswith("start")
         prefix = eval_mode
-        if not is_train_dataset and FLAGS.val_dataset_paths is None:
-            continue
         if os.getenv("LOCAL_RANK", "0") == "0":
             Path(osp.join(output_dir, 'eval', prefix)).mkdir(parents=True, exist_ok=True)
         snippets = (train_dataset.clip_snippets_flat if is_train_dataset
