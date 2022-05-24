@@ -4,7 +4,7 @@ pytorch-lightning
 ml_collections
 #git+https://github.com/DLR-RM/stable-baselines3.git@master
 tensorboardX==2.5
-h5py
+h5py==3.6.0
 azure.storage.blob==12.9.0
-azureml-sdk
+azureml-core
 -e git+https://github.com/microsoft-fevieira/atac.git#egg=atac
