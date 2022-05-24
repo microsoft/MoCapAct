@@ -64,8 +64,11 @@ script_run_config = ScriptRunConfig(
         "--train_dataset_files", "CMU_016_22-0-82.hdf5",
         "--val_dataset_files", "CMU_016_22-0-82.hdf5",
         "--env_name", "MocapTrackingGymEnv",
+        "--gpu_id", "0",
+        "--n_grad_steps","5000",
+        "--beta", "100",
     ],
-    compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
+    compute_target=compute_manager.create_compute_target(ws, 'gpu-NC6'),
     environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'), version=14)
 )
 exp.tag('algo', 'ATAC')
