@@ -58,7 +58,7 @@ class AzureBlobConnector():
         elif connection_string and container_name:
             self.container_client = ContainerClient.from_connection_string(connection_string, container_name, retry_policy=retry_policy)
         else:
-            raise Exception('No storage account credentials passed.')
+            print('No storage account credentials passed.')
 
     def create_container(self) -> None:
         self.container_client.create_container()
