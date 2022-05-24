@@ -66,7 +66,7 @@ script_run_config = ScriptRunConfig(
         "--env_name", "MocapTrackingGymEnv",
     ],
     compute_target=compute_manager.create_compute_target(ws, 'gpu-NC24'),
-    environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'))
+    environment=environment_manager.create_env(ws, "hum-control-env", os.path.join(root_dir, 'requirements.txt'), version=14)
 )
 exp.tag('algo', 'ATAC')
 
