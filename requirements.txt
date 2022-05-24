@@ -2,4 +2,5 @@ dm_control==1.0.2
 stable-baselines3
 pytorch-lightning
 ml_collections
+mujoco==2.1.5
 #git+https://github.com/DLR-RM/stable-baselines3.git@master
