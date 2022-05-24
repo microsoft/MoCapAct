@@ -7,3 +7,4 @@ tensorboardX==2.5
 h5py
 azure.storage.blob==12.9.0
 azureml-sdk
+-e git+https://github.com/microsoft-fevieira/atac.git#egg=atac
