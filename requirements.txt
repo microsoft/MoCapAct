@@ -1,4 +1,5 @@
 dm_control==1.0.2
+imageio
 stable-baselines3
 pytorch-lightning
 ml_collections
