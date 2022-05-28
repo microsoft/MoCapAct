@@ -261,7 +261,7 @@ def main(_):
         strategy=strategy,
         track_grad_norm=2 if FLAGS.track_grad_norm else -1,
         max_steps=FLAGS.n_steps,
-        max_time=timedelta(hours=FLAGS.n_hours) if FLAGS.n_steps is None else None,
+        max_time=timedelta(hours=FLAGS.n_hours),
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
         val_check_interval=FLAGS.validation_freq if val_loader is not None else None,
