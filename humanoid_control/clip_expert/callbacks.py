@@ -4,7 +4,6 @@ import numpy as np
 from typing import Union, Optional, Callable
 import gym
 import imageio
-from datetime import datetime
 
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 from stable_baselines3.common.utils import safe_mean
@@ -12,45 +11,12 @@ from stable_baselines3.common.vec_env import VecEnv, sync_envs_normalization
 
 from humanoid_control.sb3 import evaluation
 
-class SaveVecNormalizeCallback(BaseCallback):
-    """
-    Taken from: https://github.com/DLR-RM/rl-baselines3-zoo/blob/master/utils/callbacks.py
-    Callback for saving a VecNormalize wrapper every ``save_freq`` steps
-    :param save_freq: (int)
-    :param save_path: (str) Path to the folder where ``VecNormalize`` will be saved, as ``vecnormalize.pkl``
-    :param name_prefix: (str) Common prefix to the saved ``VecNormalize``, if None (default)
-        only one file will be kept.
-    """
-
-    def __init__(self, save_freq: int, save_path: str, name_prefix: Optional[str] = None, verbose: int = 0):
-        super().__init__(verbose)
-        self.save_freq = save_freq
-        self.save_path = save_path
-        self.name_prefix = name_prefix
-
-    def _init_callback(self) -> None:
-        # Create folder if needed
-        if self.save_path is not None:
-            os.makedirs(self.save_path, exist_ok=True)
-
-    def _on_step(self) -> bool:
-        if self.n_calls % self.save_freq == 0:
-            if self.name_prefix is not None:
-                path = os.path.join(self.save_path, f"{self.name_prefix}_{self.num_timesteps}_steps.pkl")
-            else:
-                path = os.path.join(self.save_path, "vecnormalize.pkl")
-            if self.model.get_vec_normalize_env() is not None:
-                self.model.get_vec_normalize_env().save(path)
-                if self.verbose > 1:
-                    print(f"Saving VecNormalize to {path}")
-        return True
-
 class NormalizedRolloutCallback(BaseCallback):
     """
     Also logs the rollout episode reward and length which are normalized by the mocap
     clip length.
     """
-    def __init__(self, verbose: float = 0):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose)
 
     def _on_step(self) -> bool:
@@ -64,19 +30,6 @@ class NormalizedRolloutCallback(BaseCallback):
                 l_norm_mean = safe_mean([ep_info['l_norm'] for ep_info in self.model.ep_info_buffer])
                 self.logger.record("rollout/ep_rew_mean_norm", r_norm_mean)
                 self.logger.record("rollout/ep_len_mean_norm", l_norm_mean)
-
-class LogOnRolloutEndCallback(BaseCallback):
-    def __init__(self, log_dir, verbose: float = 0):
-        super().__init__(verbose)
-        self.filename = osp.join(log_dir, 'last_time.txt')
-
-    def _on_step(self) -> bool:
-        return True
-
-    def _on_rollout_end(self) -> None:
-        with open(self.filename, 'w') as f:
-            f.write(str(datetime.now().timestamp()))
-            f.flush()
 
 class EarlyStoppingCallback(BaseCallback):
     """
@@ -166,7 +119,7 @@ class MocapTrackingEvalCallback(EvalCallback):
                         "and warning above."
                     )
 
-            self.eval_env.seed(0) # argument ignored
+            self.eval_env.seed(0)
             results = evaluation.evaluate_locomotion_policy(
                 self.model,
                 self.eval_env,
