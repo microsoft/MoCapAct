@@ -1,6 +1,7 @@
 import os.path as osp
 import numpy as np
 from absl import app, flags, logging
+from pathlib import Path
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import torch
 import imageio
@@ -96,6 +97,7 @@ def main(_):
         print(f"Mean reward per step:           {np.mean(rews_per_step):.3f} +/- {np.std(rews_per_step):.3f}")
 
         if FLAGS.eval_save_path is not None:
+            Path(osp.dirname(FLAGS.eval_save_path)).mkdir(parents=True, exist_ok=True)
             np.savez(
                 osp.join(FLAGS.eval_save_path),
                 ep_rews=ep_rews,
@@ -105,6 +107,7 @@ def main(_):
                 rews_per_steps=rews_per_step
             )
         if record_video:
+            Path(osp.dirname(FLAGS.video_save_path)).mkdir(parents=True, exist_ok=True)
             imageio.mimwrite(FLAGS.video_save_path, ep_frames, fps=1/0.03)
 
     if FLAGS.visualize:

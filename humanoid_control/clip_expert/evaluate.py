@@ -6,6 +6,7 @@ import imageio
 from absl import app
 from absl import flags
 from absl import logging
+from pathlib import Path
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from dm_control.viewer import application
@@ -87,6 +88,7 @@ def main(_):
         print(f"Mean reward per step:           {np.mean(rews_per_step):.3f} +/- {np.std(rews_per_step):.3f}")
 
         if FLAGS.eval_save_path is not None:
+            Path(osp.dirname(FLAGS.eval_save_path)).mkdir(parents=True, exist_ok=True)
             np.savez(
                 FLAGS.eval_save_path,
                 ep_rews=ep_rews,
@@ -96,6 +98,7 @@ def main(_):
                 rews_per_step=rews_per_step
             )
         if record_video:
+            Path(osp.dirname(FLAGS.video_save_path)).mkdir(parents=True, exist_ok=True)
             imageio.mimwrite(FLAGS.video_save_path, frames, fps=1/0.03)
 
     if FLAGS.visualize:
