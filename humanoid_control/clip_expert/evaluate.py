@@ -19,7 +19,7 @@ from humanoid_control.envs import tracking
 from humanoid_control.clip_expert import utils as clip_expert_utils
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string("policy_path", None, "Path to the policy")
+flags.DEFINE_string("policy_root", None, "Path to the policy")
 flags.DEFINE_integer("min_steps", 10, "Minimum number of steps (used for RSI)")
 flags.DEFINE_float("act_noise", 0.1, "Action noise in humanoid")
 
