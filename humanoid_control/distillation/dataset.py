@@ -10,6 +10,8 @@ from torch.utils.data import Dataset
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 from humanoid_control import observables
 
+MULTIPLIER = 10
+
 def weighted_average(arrays, weights):
     total = 0
     for array, weight in zip(arrays, weights):
@@ -306,7 +308,7 @@ class ExpertDataset(Dataset):
                 for snippet in clip_snippets:
                     _, start, end = snippet.split('-')
                     clip_len = int(end)-int(start)
-                    snippet_weight = max(self._max_clip_len / clip_len, 1.) if self._clip_len_upsampling else 1.
+                    snippet_weight = int(self._max_clip_len / clip_len * MULTIPLIER) if self._clip_len_upsampling else 1
 
                     len_iterator = itertools.chain(
                         dset[f"{snippet}/start_metrics/episode_lengths"][:n_start_rollouts],
@@ -318,7 +320,7 @@ class ExpertDataset(Dataset):
                         snippet_len_weights.append(snippet_weight)
                         if ep_len < self._min_seq_steps:
                             continue
-                        self._total_len += int(snippet_weight * (ep_len - (self._min_seq_steps-1)))
+                        self._total_len += snippet_weight * (ep_len - (self._min_seq_steps-1))
 
     def _compute_offset(self, array: np.ndarray):
         """
@@ -356,15 +358,14 @@ class ExpertDataset(Dataset):
         adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
         snippet_len_weight = self._snippet_len_weights[dset_idx][clip_idx]
 
+        start_idx = int((idx - self._logical_indices[dset_idx][clip_idx]) / snippet_len_weight)
         if self.is_sequential:
-            start_idx = int((idx - self._logical_indices[dset_idx][clip_idx]) / snippet_len_weight)
             end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
             all_obs = obs_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
         else:
-            rel_idx = int((idx - self._logical_indices[dset_idx][clip_idx]) / snippet_len_weight)
-            all_obs = obs_dset[rel_idx]
-            act = act_dset[rel_idx]
+            all_obs = obs_dset[start_idx]
+            act = act_dset[start_idx]
 
         if self._normalize_obs:
             all_obs = (all_obs - self.obs_mean) / self.obs_std
@@ -393,11 +394,11 @@ class ExpertDataset(Dataset):
             if self.is_sequential:
                 weight = weight * np.ones(end_idx-start_idx)
         else: # state-action weight
-            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
+            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[start_idx]
             if self._advantage_weights:
                 energy = adv - self._advantage_offset
             else:
-                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
+                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[start_idx]
                 energy = val + adv - self._q_value_offset
             weight = np.exp(energy / self._temperature)
 
