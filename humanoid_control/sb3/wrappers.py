@@ -1,6 +1,12 @@
 import time
-from stable_baselines3.common.vec_env import VecMonitor
-from stable_baselines3.common.vec_env.base_vec_env import VecEnvStepReturn
+import torch
+import numpy as np
+from typing import Callable
+from gym import spaces
+
+from stable_baselines3.common.vec_env import VecEnvWrapper, VecMonitor
+from stable_baselines3.common.utils import obs_as_tensor
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvObs, VecEnvStepReturn
 
 class MocapTrackingVecMonitor(VecMonitor):
     """
@@ -38,3 +44,39 @@ class MocapTrackingVecMonitor(VecMonitor):
                     self.results_writer.write_row(episode_info)
                 new_infos[i] = info
         return obs, rewards, dones, new_infos
+
+class EmbedToActionVecWrapper(VecEnvWrapper):
+    """
+    A VecEnvWrapper that transforms a high-level "embedding" action
+    to a low-level action to execute on the considered environment.
+    """
+
+    def __init__(
+        self,
+        venv: VecEnv,
+        embed_dim: int,
+        max_embed: float,
+        embed_to_action: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    ):
+        action_space = spaces.Box(-max_embed, max_embed, (embed_dim,))
+        super().__init__(venv, action_space=action_space)
+        self.embed_to_action = embed_to_action
+
+    def reset(self) -> VecEnvObs:
+        obs = self.venv.reset()
+        obs = {k: v.astype(np.float32) for k, v in obs.items()}
+        self.obs = obs_as_tensor(obs, 'cpu')
+        return obs
+
+    def step_async(self, actions: np.ndarray) -> None:
+        acts = torch.tensor(actions)
+        with torch.no_grad():
+            low_level_actions = self.embed_to_action(self.obs, acts).numpy()
+        low_level_actions = np.clip(low_level_actions, self.venv.action_space.low, self.venv.action_space.high)
+        self.venv.step_async(low_level_actions)
+
+    def step_wait(self) -> VecEnvStepReturn:
+        obs, rew, done, info = self.venv.step_wait()
+        obs = {k: v.astype(np.float32) for k, v in obs.items()}
+        self.obs = obs_as_tensor(obs, 'cpu')
+        return obs, rew, done, info
