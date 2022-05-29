@@ -31,7 +31,7 @@ flags.DEFINE_integer("train_rsi_rollouts", -1, "Number of RSI rollouts to consid
 flags.DEFINE_integer("val_start_rollouts", -1, "Number of start rollouts to consider in validation set")
 flags.DEFINE_integer("val_rsi_rollouts", -1, "Number of RSI rollouts to consider in validation set")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
-flags.DEFINE_bool("do_clip_len_upsampling", False, "Compensate for shorter clips by upsampling")
+flags.DEFINE_bool("clip_len_upsampling", False, "Compensate for shorter clips by upsampling")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics, if desired")
 
@@ -144,7 +144,7 @@ def main(_):
         n_start_rollouts=FLAGS.train_start_rollouts,
         n_rsi_rollouts=FLAGS.train_rsi_rollouts,
         normalize_obs=False, #FLAGS.normalize_obs,
-        do_clip_len_upsampling=FLAGS.do_clip_len_upsampling,
+        clip_len_upsampling=FLAGS.clip_len_upsampling,
         clip_weighted=FLAGS.clip_weighted,
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
@@ -165,7 +165,7 @@ def main(_):
             n_start_rollouts=FLAGS.val_start_rollouts,
             n_rsi_rollouts=FLAGS.val_rsi_rollouts,
             normalize_obs=False, #FLAGS.normalize_obs,
-            do_clip_len_upsampling=FLAGS.do_clip_len_upsampling,
+            clip_len_upsampling=FLAGS.clip_len_upsampling,
             clip_weighted=FLAGS.clip_weighted,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
