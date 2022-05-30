@@ -5,6 +5,7 @@ import numpy as np
 from absl import app, flags
 import ml_collections
 from ml_collections import config_flags
+from ml_collections.config_flags import config_flags
 from datetime import datetime
 
 from stable_baselines3 import PPO
@@ -26,6 +27,8 @@ from humanoid_control.distillation import model
 FLAGS = flags.FLAGS
 # Environment hyperparameters
 flags.DEFINE_integer("episode_steps", 833, "Number of time steps in an episode")
+task_file = "humanoid_control/transfer/config.py"
+config_flags.DEFINE_config_file("task", f"{task_file}:go_to_target", "Task")
 
 # Training hyperparameters
 flags.DEFINE_string("log_root", None, "Directory where logs are stored")
@@ -71,8 +74,12 @@ flags.DEFINE_string("warm_start_root", None, "")
 flags.mark_flag_as_required('log_root')
 
 def make_env(seed=0, training=True):
-    env_id = dm_control_wrapper.DmControlWrapper.make_env_constructor(go_to_target.GoToTarget)
-    task_kwargs = dict(moving_target=True, physics_timestep=tracking.DEFAULT_PHYSICS_TIMESTEP, control_timestep=0.03)
+    env_id = dm_control_wrapper.DmControlWrapper.make_env_constructor(FLAGS.task.constructor)
+    task_kwargs = dict(
+        physics_timestep=tracking.DEFAULT_PHYSICS_TIMESTEP,
+        control_timestep=0.03,
+        **FLAGS.task.config
+    )
     env_kwargs = dict(task_kwargs=task_kwargs)
     env = env_util.make_vec_env(
         env_id=env_id,
