@@ -13,6 +13,7 @@ from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from dm_control.locomotion.tasks import go_to_target
+from dm_control.locomotion.tasks.reference_pose import tracking
 
 from humanoid_control import utils
 from humanoid_control.envs import env_util
@@ -71,7 +72,7 @@ flags.mark_flag_as_required('log_root')
 
 def make_env(seed=0, training=True):
     env_id = dm_control_wrapper.DmControlWrapper.make_env_constructor(go_to_target.GoToTarget)
-    task_kwargs = dict(moving_target=True)
+    task_kwargs = dict(moving_target=True, physics_timestep=tracking.DEFAULT_PHYSICS_TIMESTEP, control_timestep=0.03)
     env_kwargs = dict(task_kwargs=task_kwargs)
     env = env_util.make_vec_env(
         env_id=env_id,
