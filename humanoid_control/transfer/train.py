@@ -13,7 +13,6 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
-from dm_control.locomotion.tasks import go_to_target
 from dm_control.locomotion.tasks.reference_pose import tracking
 
 from humanoid_control import utils
