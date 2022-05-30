@@ -12,19 +12,19 @@ from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
+from dm_control.locomotion.tasks import go_to_target
+
 from humanoid_control import utils
 from humanoid_control.envs import env_util
 from humanoid_control.envs import dm_control_wrapper
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.sb3 import wrappers
 from humanoid_control.sb3 import callbacks
-from humanoid_control.tasks import go_to_target
 from humanoid_control.distillation import model
 
 FLAGS = flags.FLAGS
 # Environment hyperparameters
 flags.DEFINE_integer("episode_steps", 833, "Number of time steps in an episode")
-flags.DEFINE_bool("dense_reward", False, "Whether to use dense reward for training")
 
 # Training hyperparameters
 flags.DEFINE_string("log_root", None, "Directory where logs are stored")
@@ -44,9 +44,6 @@ flags.DEFINE_float("learning_rate", 1e-4, "Step size for PPO")
 # Low-level policy hyperparameters
 flags.DEFINE_string("low_level_policy_path", None, "Path to low-level policy, if desired")
 flags.DEFINE_float("max_embed", 3., "If there's a low-level policy, the element-wise maximum embedding")
-
-#flags.DEFINE_float("target_entropy", -30., "Target entropy for SAC")
-#flags.DEFINE_float("ent_coef", None, "Entropy coefficient")
 
 # Network hyperparameters
 flags.DEFINE_integer("n_layers", 3, "Number of hidden layers")
@@ -72,9 +69,9 @@ flags.DEFINE_string("warm_start_root", None, "")
 
 flags.mark_flag_as_required('log_root')
 
-def make_env(seed=0, dense_reward=True, training=True):
+def make_env(seed=0, training=True):
     env_id = dm_control_wrapper.DmControlWrapper.make_env_constructor(go_to_target.GoToTarget)
-    task_kwargs = dict(dense_reward=dense_reward, moving_target=True)
+    task_kwargs = dict(moving_target=True)
     env_kwargs = dict(task_kwargs=task_kwargs)
     env = env_util.make_vec_env(
         env_id=env_id,
@@ -123,12 +120,11 @@ def main(_):
     # Rollout environment
     env = make_env(
         seed=FLAGS.seed,
-        dense_reward=FLAGS.dense_reward,
         training=True,
     )
 
     # Evaluation environment where start point is selected at random
-    eval_env = make_env(seed=FLAGS.eval.seed, dense_reward=False, training=False)
+    eval_env = make_env(seed=FLAGS.eval.seed, training=False)
     eval_freq = int(FLAGS.eval.freq / FLAGS.n_workers)
     eval_model_path = osp.join(eval_path, 'model')
     callback_on_new_best = callbacks.SaveVecNormalizeCallback(
@@ -146,13 +142,9 @@ def main(_):
         deterministic=True,
     )
 
-    # # Load a prior policy, if available
-    # experiment_root = osp.abspath(osp.join(log_dir, osp.pardir))
-    # evaluation_paths = glob.glob(osp.join(experiment_root, '**/eval_random/evaluations.npz'), recursive=True)
     layer_sizes = FLAGS.n_layers * [FLAGS.layer_size]
     policy_kwargs = dict(
         net_arch=[dict(pi=layer_sizes, vf=layer_sizes)],
-        #net_arch=[dict(pi=layer_sizes, qf=layer_sizes)],
         activation_fn=utils.str_to_callable(FLAGS.activation_fn),
         log_std_init=np.log(FLAGS.std_init),
         features_extractor_class=features_extractor.CmuHumanoidFeaturesExtractor,
@@ -165,11 +157,6 @@ def main(_):
                 learning_rate=FLAGS.learning_rate, target_kl=FLAGS.target_kl,
                 policy_kwargs=policy_kwargs, seed=FLAGS.seed, verbose=1,
                 device=FLAGS.device)
-    #ent_coef = FLAGS.ent_coef or 'auto'
-    #model = SAC("MultiInputPolicy", env,
-    #            learning_rate=FLAGS.learning_rate, buffer_size=int(3e6), learning_starts=2000,
-    #            batch_size=1024, gamma=FLAGS.gamma, train_freq=1, gradient_steps=1, ent_coef=ent_coef,
-    #            target_entropy=FLAGS.target_entropy, verbose=1, seed=FLAGS.seed, device=FLAGS.device)
 
     if FLAGS.do_logging:
         model.set_logger(logger)
