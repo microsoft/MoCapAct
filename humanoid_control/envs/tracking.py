@@ -4,10 +4,10 @@ from typing import Any, Dict, Optional, Tuple
 
 from dm_control.locomotion.mocap import cmu_mocap_data
 from dm_control.locomotion.tasks.reference_pose import types
+from dm_control.locomotion.tasks.reference_pose import tracking
 from dm_control.locomotion.walkers import cmu_humanoid
 
 from humanoid_control.envs import dm_control_wrapper
-from humanoid_control.tasks import tracking
 
 class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
     """
