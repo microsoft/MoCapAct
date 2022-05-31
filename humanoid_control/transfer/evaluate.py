@@ -87,6 +87,7 @@ def main(_):
 
     @torch.no_grad()
     def policy_fn(time_step):
+        obs = env.get_observation(time_step)
         embed, _ = high_level_model.predict(obs, deterministic=True)
         embed = np.clip(embed, -FLAGS.max_embed, FLAGS.max_embed)
         obs = {k: v.astype(np.float32) for k, v in obs.items()}
