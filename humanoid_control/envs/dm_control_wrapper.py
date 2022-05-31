@@ -48,6 +48,7 @@ class DmControlWrapper(core.Env):
         task_kwargs: Optional[Dict[str, Any]] = None,
         environment_kwargs: Optional[Dict[str, Any]] = None,
         act_noise: float = 0.,
+        arena_size: Tuple[float, float] = (8., 8.),
 
         # for rendering
         width: int = 640,
@@ -62,7 +63,13 @@ class DmControlWrapper(core.Env):
         environment_kwargs = environment_kwargs or dict()
 
         # create task
-        self._env = self._create_env(task_type, task_kwargs, environment_kwargs, act_noise=act_noise)
+        self._env = self._create_env(
+            task_type,
+            task_kwargs,
+            environment_kwargs,
+            act_noise=act_noise,
+            arena_size=arena_size
+        )
         self._original_rng_state = self._env.random_state.get_state()
 
         # Set observation and actions spaces
@@ -114,9 +121,16 @@ class DmControlWrapper(core.Env):
             self._env.random_state.set_state(self._original_rng_state)
         return self._env.random_state.get_state()[1]
 
-    def _create_env(self, task_type, task_kwargs, environment_kwargs, act_noise=0.) -> composer.Environment:
+    def _create_env(
+        self,
+        task_type,
+        task_kwargs,
+        environment_kwargs,
+        act_noise=0.,
+        arena_size=(8., 8.)
+    ) -> composer.Environment:
         walker = self._get_walker()
-        arena = self._get_arena()
+        arena = self._get_arena(arena_size)
         task = task_type(
             walker,
             arena,
@@ -136,8 +150,8 @@ class DmControlWrapper(core.Env):
         initializer = StandInitializer()
         return cmu_humanoid.CMUHumanoidPositionControlledV2020(initializer=initializer)
 
-    def _get_arena(self):
-        return floors.Floor()
+    def _get_arena(self, arena_size):
+        return floors.Floor(arena_size)
 
     def _create_observation_space(self) -> spaces.Dict:
         obs_spaces = dict()
