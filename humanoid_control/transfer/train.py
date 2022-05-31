@@ -1,5 +1,6 @@
 import os.path as osp
 import gym
+import shutil
 from pathlib import Path
 import numpy as np
 from absl import app, flags
@@ -123,6 +124,13 @@ def main(_):
     if FLAGS.do_logging:
         format_strings = ['csv', 'tensorboard', 'stdout']
         logger = configure(log_dir, format_strings)
+
+    # If given a low-level policy, copy it to log directory to ease evaluation
+    if FLAGS.low_level_policy_path:
+        shutil.copyfile(
+            FLAGS.low_level_policy_path,
+            osp.join(eval_path, 'model/low_level_policy.ckpt')
+        )
 
     # Rollout environment
     env = make_env(
