@@ -31,6 +31,7 @@ config_flags.DEFINE_config_file("task", f"{task_file}:go_to_target", "Task")
 
 # Visualization hyperparameters
 flags.DEFINE_bool("visualize", True, "Whether to visualize via GUI")
+flags.DEFINE_bool("big_arena", False, "Whether to use a bigger arena for visualization")
 
 # Evaluation hyperparameters
 flags.DEFINE_integer("n_eval_episodes", 0, "Number of episodes to numerically evaluate policy")
@@ -51,7 +52,8 @@ def main(_):
         control_timestep=0.03,
         **FLAGS.task.config
     )
-    env = env_ctor(task_kwargs=task_kwargs)
+    arena_size = (1000., 1000.) if FLAGS.big_arena else (8., 8.)
+    env = env_ctor(task_kwargs=task_kwargs, arena_size=arena_size)
 
     # Set up model
     with zipfile.ZipFile(osp.join(FLAGS.model_root, 'best_model.zip')) as archive:
