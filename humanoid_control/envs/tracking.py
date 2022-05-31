@@ -35,12 +35,12 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         environment_kwargs = environment_kwargs or dict()
         super().__init__(
             tracking.MultiClipMocapTracking,
-            task_kwargs,
-            environment_kwargs,
-            act_noise,
-            width,
-            height,
-            camera_id
+            task_kwargs=task_kwargs,
+            environment_kwargs=environment_kwargs,
+            act_noise=act_noise,
+            width=width,
+            height=height,
+            camera_id=camera_id
         )
 
     def _get_walker(self):
