@@ -13,9 +13,10 @@ class SpeedControl(composer.Task):
         self,
         walker,
         arena,
-        max_speed=5.,
+        max_speed=4.5,
         reward_margin=0.75,
-        steps_before_changing_speed=150,
+        direction_exponent=1.,
+        steps_before_changing_speed=166,
         physics_timestep=tracking.DEFAULT_PHYSICS_TIMESTEP,
         control_timestep=0.03
     ):
@@ -24,15 +25,18 @@ class SpeedControl(composer.Task):
         self._walker.create_root_joints(self._arena.attach(self._walker))
         self._max_speed = max_speed
         self._reward_margin = reward_margin
+        self._direction_exponent = direction_exponent
         self._steps_before_changing_speed = steps_before_changing_speed
         self._move_speed = 0.
+        self._move_angle = 0.
         self._move_speed_counter = 0.
 
         self._task_observables = collections.OrderedDict()
         def task_state(physics):
             del physics
-            time = self._move_speed_counter / self._steps_before_changing_speed
-            return np.array([self._move_speed, time])
+            sin, cos = np.sin(self._move_angle), np.cos(self._move_angle)
+            phase = self._move_speed_counter / self._steps_before_changing_speed
+            return np.array([self._move_speed, sin, cos, phase])
         self._task_observables['target_obs'] = dm_observable.Generic(task_state)
 
         enabled_observables = []
@@ -63,6 +67,7 @@ class SpeedControl(composer.Task):
 
     def _sample_move_speed(self, random_state):
         self._move_speed = random_state.uniform(high=self._max_speed)
+        self._move_angle = random_state.uniform(high=2*np.pi)
         self._move_speed_counter = 0
 
     def should_terminate_episode(self, physics):
@@ -92,9 +97,19 @@ class SpeedControl(composer.Task):
     def get_reward(self, physics):
         xvel = self._walker.observables.torso_xvel(physics)
         yvel = self._walker.observables.torso_yvel(physics)
-        com_velocity = np.linalg.norm([xvel, yvel])
-        velocity_diff = com_velocity - self._move_speed
-        reward = np.exp(-(velocity_diff / self._reward_margin)**2)
+        speed = np.linalg.norm([xvel, yvel])
+        speed_error = self._move_speed - speed
+        speed_reward = np.exp(-(speed_error / self._reward_margin)**2)
+        if np.isclose(xvel, 0.) and np.isclose(yvel, 0.):
+            angle_reward = 1.
+        else:
+            direction = np.array([xvel, yvel])
+            direction /= np.linalg.norm(direction)
+            direction_tgt = np.array([np.cos(self._move_angle), np.sin(self._move_angle)])
+            dot = direction_tgt.dot(direction)
+            angle_reward = ((dot + 1) / 2)**self._direction_exponent
+
+        reward = speed_reward * angle_reward
         return reward
 
     def before_step(self, physics, action, random_state):
