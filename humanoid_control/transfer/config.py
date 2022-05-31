@@ -14,9 +14,9 @@ def get_config(task_string):
         'speed_control': ConfigDict({
             'constructor': speed_control.SpeedControl,
             'config': ConfigDict(dict(
-                max_speed=5.,
+                max_speed=4.5,
                 reward_margin=0.75,
-                steps_before_changing_speed=150
+                steps_before_changing_speed=166
             ))
         })
     }
