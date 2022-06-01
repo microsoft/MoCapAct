@@ -11,7 +11,6 @@ from datetime import datetime
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import EvalCallback
-from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from dm_control.locomotion.tasks.reference_pose import tracking
@@ -22,6 +21,7 @@ from humanoid_control.envs import dm_control_wrapper
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.sb3 import wrappers
 from humanoid_control.sb3 import callbacks
+from humanoid_control.sb3.logger import configure
 from humanoid_control.distillation import model
 
 FLAGS = flags.FLAGS
@@ -44,6 +44,7 @@ flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
 flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
 flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
 flags.DEFINE_float("learning_rate", 1e-4, "Step size for PPO")
+flags.DEFINE_integer("flush_every", None, "How often (in minutes) to flush logs")
 
 # Low-level policy hyperparameters
 flags.DEFINE_string("low_level_policy_path", None, "Path to low-level policy, if desired")
@@ -123,7 +124,7 @@ def main(_):
         f.write(FLAGS.flags_into_string())
     if FLAGS.do_logging:
         format_strings = ['csv', 'tensorboard', 'stdout']
-        logger = configure(log_dir, format_strings)
+        logger = configure(log_dir, format_strings, FLAGS.flush_every)
 
     # If given a low-level policy, copy it to log directory to ease evaluation
     if FLAGS.low_level_policy_path:
