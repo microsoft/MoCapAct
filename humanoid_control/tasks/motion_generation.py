@@ -29,6 +29,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
         ref_path: Text,
         ref_steps: Sequence[int],
         dataset: Union[Text, Sequence[Any]],
+        termination_error_threshold: float = 0.3,
         min_steps: int = 10,
         max_steps: Optional[int] = None,
         steps_before_color_change: Optional[int] = 32,
@@ -48,7 +49,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
             ref_path,
             ref_steps,
             dataset,
-            termination_error_threshold=float('inf'),
+            termination_error_threshold=termination_error_threshold,
             prop_termination_error_threshold=float('inf'),
             min_steps=min_steps,
             reward_type='comic',
@@ -92,10 +93,13 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
 
     def get_reward(self, physics: 'mjcf.Physics') -> float:
         # Find if there's a disallowed contact.
+        disallowed_contact = False
         for contact in physics.data.contact:
             if self._is_disallowed_contact(contact):
-                self._should_truncate = True
+                disallowed_contact = True
                 break
+
+        self._should_truncate = disallowed_contact and (self._termination_error > self._termination_error_threshold)
 
         return 0.
         
