@@ -30,7 +30,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
         ref_steps: Sequence[int],
         dataset: Union[Text, Sequence[Any]],
         min_steps: int = 10,
-        max_steps_override: Optional[int] = None,
+        max_steps: Optional[int] = None,
         steps_before_color_change: Optional[int] = 32,
         physics_timestep: float = tracking.DEFAULT_PHYSICS_TIMESTEP,
         always_init_at_clip_start: bool = False,
@@ -63,7 +63,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
             enabled_reference_observables=enabled_reference_observables
         )
         
-        self._max_steps_override = max_steps_override
+        self._max_steps = max_steps
         self._steps_before_color_change = steps_before_color_change
         self._time_step_override = None
 
@@ -123,11 +123,11 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
         self._compute_termination_error()
 
         self._end_mocap = self._time_step == self._last_step
-        if self._max_steps_override is not None:
-            if self._end_mocap and self._time_step_override < self._max_steps_override:
+        if self._max_steps is not None:
+            if self._end_mocap and self._time_step_override < self._max_steps:
                 self._time_step -= 1
                 self._end_mocap = False
-            elif not self._end_mocap and self._time_step_override >= self._max_steps_override:
+            elif not self._end_mocap and self._time_step_override >= self._max_steps:
                 self._end_mocap = True
         
         self._reference_observations.update(self.get_all_reference_observations(physics))
