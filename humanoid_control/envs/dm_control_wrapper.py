@@ -1,3 +1,4 @@
+import os.path as osp
 import numpy as np
 import tree
 import mujoco
@@ -17,13 +18,16 @@ from gym import core
 from gym import spaces
 
 class StandInitializer(initializers.WalkerInitializer):
-    def __init__(self):
-        ref_path = cmu_mocap_data.get_path_for_cmu(version='2020')
-        mocap_loader = loader.HDF5TrajectoryLoader(ref_path)
-        trajectory = mocap_loader.get_trajectory('CMU_040_12')
-        clip_reference_features = trajectory.as_dict()
-        clip_reference_features = tracking._strip_reference_prefix(clip_reference_features, 'walker/')
-        self._stand_features = tree.map_structure(lambda x: x[0], clip_reference_features)
+    def __init__(self, stand_features_npz_path=None):
+        if stand_features_npz_path:
+            self._stand_features = dict(np.load(stand_features_npz_path))
+        else:
+            ref_path = cmu_mocap_data.get_path_for_cmu(version='2020')
+            mocap_loader = loader.HDF5TrajectoryLoader(ref_path)
+            trajectory = mocap_loader.get_trajectory('CMU_040_12')
+            clip_reference_features = trajectory.as_dict()
+            clip_reference_features = tracking._strip_reference_prefix(clip_reference_features, 'walker/')
+            self._stand_features = tree.map_structure(lambda x: x[0], clip_reference_features)
 
     def initialize_pose(self, physics, walker, random_state):
         del random_state
@@ -147,7 +151,8 @@ class DmControlWrapper(core.Env):
         return env
 
     def _get_walker(self):
-        initializer = StandInitializer()
+        directory = osp.dirname(osp.abspath(__file__))
+        initializer = StandInitializer(osp.join(directory, 'stand_features.npz'))
         return cmu_humanoid.CMUHumanoidPositionControlledV2020(initializer=initializer)
 
     def _get_arena(self, arena_size):
