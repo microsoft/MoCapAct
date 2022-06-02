@@ -89,7 +89,7 @@ flags.mark_flag_as_required("train_dataset_files")
 
 def make_env(
     seed=0,
-    clip_ids=[],
+    clip_ids=None,
     start_steps=[0],
     end_steps=[0],
     min_steps=10,
