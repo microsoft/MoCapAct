@@ -32,7 +32,7 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "program": "humanoid_control/distillation/rollout_experts.py",
-            "args": 
+            "args":
             [
                 "--input_dirs", "data/experts/CMU_001_01-0-178",
                 "--output_path", "data/CMU_001_01-0-178.hdf5",
@@ -50,7 +50,7 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "program": "humanoid_control/offline_rl/train_bcq.py",
-            "args": 
+            "args":
             [
                 "--output_root", "${workspaceFolder}/../data/offline_rl",
                 "--dataset_local_path", "${workspaceFolder}/../data",
@@ -67,13 +67,16 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "program": "humanoid_control/offline_rl/train_atac.py",
-            "args": 
+            "args":
             [
                 "--log_root", "${workspaceFolder}/../data/logs",
                 "--dataset_local_path", "${workspaceFolder}/../data",
-                "--train_dataset_files", "CMU_001_01-0-178.hdf5",
-                "--replay_buffer_size", "1000",
+                "--train_dataset_files", "CMU_001_01.hdf5",  // "CMU_001_01-0-178.hdf5",
+                "--replay_buffer_size", "100000",
                 "--env_name", "MocapTrackingGymEnv",
+                "--gpu_id", "0",
+                "--n_grad_steps","5000",
+                "--beta", "100",
             ],
             "justMyCode": false,
             "console": "integratedTerminal",
@@ -84,7 +87,7 @@
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "program": "./scripts/download_dataset.py",
-            "args": 
+            "args":
             [
                 "-f", "CMU_001_01"
             ],

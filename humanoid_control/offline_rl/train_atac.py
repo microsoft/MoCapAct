@@ -349,6 +349,7 @@ if __name__ == '__main__':
     parser.add_argument('--use_two_qfs', type=str2bool, default=True)
     parser.add_argument('--q_eval_mode', type=str, default='0.5_0.5')
     parser.add_argument('--init_pess', type=str2bool, default=False)  # turn this on of ATAC0
+    parser.add_argument('--n_grad_steps', type=int, default=2000)
 
     parser.add_argument('--replay_buffer_size', type=int, default=int(2e6))
     parser.add_argument('--log_root', type=str, default='./logs')
