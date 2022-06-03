@@ -72,7 +72,7 @@ Created dataset has following hierarchy:
        |- act_var
        |- count
     |- n_start_rollouts
-    |- n_random_rollouts
+    |- n_rsi_rollouts
 
 For each clip, "loaded_metrics" corresponds to the metrics of the loaded policy as
 given by the evaluations.npz file. "rsi_metrics" corresponds to the metrics of the loaded
@@ -116,7 +116,7 @@ flags.DEFINE_bool("separate_clips", False, "Whether to save different clips to d
 
 # Rollout flags
 flags.DEFINE_integer("n_start_rollouts", 16, "Number of rollouts per expert at start of clip")
-flags.DEFINE_integer("n_random_rollouts", 16, "Number of rollouts per expert from random point in clip")
+flags.DEFINE_integer("n_rsi_rollouts", 16, "Number of rollouts per expert from random point in clip")
 flags.DEFINE_integer("n_workers", 8, "Number of parallel workers for rolling out")
 flags.DEFINE_float("act_noise", 0.1, "Action noise in humanoid")
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off expert rollout")
@@ -234,7 +234,7 @@ def collect_rollouts(clip_path, always_init_at_clip_start):
     curr_actions = [[] for _ in range(FLAGS.n_workers)]
     curr_rewards = [[] for _ in range(FLAGS.n_workers)]
     curr_values = [[] for _ in range(FLAGS.n_workers)]
-    n_rollouts = FLAGS.n_start_rollouts if always_init_at_clip_start else FLAGS.n_random_rollouts
+    n_rollouts = FLAGS.n_start_rollouts if always_init_at_clip_start else FLAGS.n_rsi_rollouts
     while True:
         for i in range(FLAGS.n_workers):
             for k, v in obs.items():
@@ -409,9 +409,9 @@ def create_dataset(expert_paths, expert_metrics, output_path):
     count_dset[...] = count
 
     # Number of rollouts
-    random_rollouts_dset = dset.create_dataset("n_random_rollouts", (), np.int64)
+    random_rollouts_dset = dset.create_dataset("n_rsi_rollouts", (), np.int64)
     start_rollouts_dset = dset.create_dataset("n_start_rollouts", (), np.int64)
-    random_rollouts_dset[...] = FLAGS.n_random_rollouts
+    random_rollouts_dset[...] = FLAGS.n_rsi_rollouts
     start_rollouts_dset[...] = FLAGS.n_start_rollouts
 
 def main(_):
