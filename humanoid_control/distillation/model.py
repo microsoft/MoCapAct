@@ -529,7 +529,6 @@ class NpmpPolicy(BasePolicy):
         deterministic: bool = False
     ):
         embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
         embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
         return embed, embed_distribution
@@ -782,7 +781,6 @@ class McpPolicy(BasePolicy):
         deterministic: bool = False
     ):
         embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
         embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
         return embed, embed_distribution
