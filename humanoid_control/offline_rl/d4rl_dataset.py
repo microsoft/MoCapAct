@@ -87,9 +87,11 @@ class D4RLDataset(ExpertDataset):
             'terminals': [],
             'timeouts': []
         }
-        while num_transitions > 0:
-            iterator = iter(self)
-            obs, act, rew, next_obs, terminals, timeouts, weight = next(iterator)
+
+        for obs, act, rew, next_obs, terminals, timeouts, weight in iter(self):
+            if num_transitions <= 0:
+                break
+
             data_dict['observations'].append(obs)
             data_dict['actions'].append(act)
             data_dict['rewards'].append(rew)
@@ -221,5 +223,5 @@ if __name__ == "__main__":
         dataset_url='https://dilbertws7896891569.blob.core.windows.net/public?sv=2020-10-02&st=2022-03-31T02%3A16%3A46Z&se=2023-02-01T03%3A16%3A00Z&sr=c&sp=rl&sig=33NYiCqgT0m%2FWRU6kA638UrfxnVb%2FfBYaSkemYZPB14%3D',
     )
     sample = dset[0]
-    d4rl_data_dict = dset.get_in_memory_rollouts()
+    d4rl_data_dict = dset.get_in_memory_rollouts(10)
     print(d4rl_data_dict['observations'].shape)
