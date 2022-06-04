@@ -983,8 +983,6 @@ class GPT(nn.Module):
         self.block_size = config.block_size
         self.apply(self._init_weights)
 
-        print(f"{self.__class__.__name__} number of parameters: {sum(p.numel() for p in self.parameters())}")
-
     def get_block_size(self):
         return self.block_size
 
