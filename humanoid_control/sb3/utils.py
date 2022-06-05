@@ -50,7 +50,7 @@ def load_policy(
     model = rl_alg_type.load(
         osp.join(model_path, 'best_model.zip'),
         device=device,
-        custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0.)
+        custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0., seed=None)
     )
 
     return model
