@@ -106,7 +106,6 @@ def get_expert(expert_names, clip_id, start_step):
 
 def main(_):
     dataset = utils.make_clip_collection([FLAGS.clip_snippet])
-    print(dataset.end_steps)
     if FLAGS.expert_root:
         expert_names = os.listdir(FLAGS.expert_root)
         prompt_policy = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
