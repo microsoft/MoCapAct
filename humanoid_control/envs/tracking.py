@@ -32,7 +32,6 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         task_kwargs['ref_path'] = cmu_mocap_data.get_path_for_cmu(version='2020')
         task_kwargs['dataset'] = self._dataset
         task_kwargs['ref_steps'] = ref_steps
-        environment_kwargs = environment_kwargs or dict()
         super().__init__(
             tracking.MultiClipMocapTracking,
             task_kwargs=task_kwargs,
