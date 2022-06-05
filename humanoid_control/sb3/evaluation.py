@@ -130,8 +130,13 @@ def evaluate_locomotion_policy(
                     current_lengths[i] = 0
 
         if render:
+            HEIGHT, WIDTH, CHANNELS = 480, 640, 3
+            # If we're done, put in some blank frames to break up the episodes.
+            if dones[0]:
+                for _ in range(10):
+                    frames.append(np.zeros((HEIGHT, WIDTH, CHANNELS), dtype=np.uint8))
             # Custom rendering using the physics object of the first vec env.
-            frame = env.get_attr('physics')[0].render(width=640, height=480, camera_id=3).copy()
+            frame = env.get_attr('physics')[0].render(height=HEIGHT, width=WIDTH, camera_id=3).copy()
             frames.append(frame)
 
     mean_reward = np.mean(episode_rewards)

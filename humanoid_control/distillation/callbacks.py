@@ -132,3 +132,19 @@ class PolicyEvaluationCallback(Callback):
                 if self._record_video:
                     imageio.mimwrite(osp.join(self._log_dir, 'rollouts.mp4'), ep_frames, fps=30)
             self._env.close() # close environment since it consumes a lot of memory
+
+class LogEmbedCallback(Callback):
+    def __init__(self, log_dir: str, n_workers: int, verbose: int = 0):
+        super().__init__(verbose)
+        self._log_dir = log_dir
+        self._embeds = [[] for _ in range(n_workers)]
+        self._ctr = 0
+
+    def callback(self, locals, globals):
+        del globals
+        embeds, done, i = locals['states'], locals['done'], locals['i']
+        self.embeds[i].append(embeds[i])
+        if done:
+            np.save(osp.join(self._log_dir, f"episode_{self._ctr}"), np.stack(self._embeds[i]))
+            self._embeds[i] = []
+            self._ctr += 1

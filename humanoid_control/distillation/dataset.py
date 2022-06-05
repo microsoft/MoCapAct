@@ -1,10 +1,9 @@
-import os
 import bisect
 import h5py
 import itertools
 import collections
 import numpy as np
-from typing import Dict, List, Sequence, Text, Tuple, Optional, Union
+from typing import Dict, Sequence, Text, Optional, Union
 from scipy.special import logsumexp
 from gym import spaces
 from torch.utils.data import Dataset
@@ -13,6 +12,8 @@ from humanoid_control import observables
 import os
 import glob
 from tqdm import tqdm
+
+MULTIPLIER = 10
 
 def weighted_average(arrays, weights):
     total = 0
@@ -26,10 +27,12 @@ class ExpertDataset(Dataset):
         h5py_fnames: Sequence[Text],
         observables: Union[Sequence[Text], Dict[Text, Sequence[Text]]],
         clip_ids: Optional[Sequence[Text]] = None,
+        max_clip_len: int = 210,
         min_seq_steps: int = 1,
         max_seq_steps: int = 1,
         normalize_obs: bool = False,
         normalize_act: bool = False,
+        clip_len_upsampling: bool = False,
         n_start_rollouts: int = -1,
         n_rsi_rollouts: int = -1,
         concat_observables: bool = True,
@@ -75,6 +78,7 @@ class ExpertDataset(Dataset):
         self._clip_snippets_flat = tuple(itertools.chain.from_iterable(self._clip_snippets))
         self._clip_ids = tuple({k.split('-')[0] for k in self._clip_snippets_flat})
 
+        self._max_clip_len = max_clip_len
         self._min_seq_steps = min_seq_steps
         self._max_seq_steps = max_seq_steps
         self._concat_observables = concat_observables
@@ -84,6 +88,7 @@ class ExpertDataset(Dataset):
         self._max_weight = max_weight
         self._normalize_obs = normalize_obs
         self._normalize_act = normalize_act
+        self._clip_len_upsampling = clip_len_upsampling
         self._n_start_rollouts = n_start_rollouts
         self._n_rsi_rollouts = n_rsi_rollouts
         self._metrics_path = metrics_path
@@ -288,13 +293,15 @@ class ExpertDataset(Dataset):
         self._total_len = 0
         self._dset_indices = []
         self._logical_indices, self._dset_groups = [[] for _ in self._h5py_fnames], [[] for _ in self._h5py_fnames]
+        self._snippet_len_weights = [[] for _ in self._h5py_fnames]
         iterator = zip(
             self._h5py_fnames,
             self._clip_snippets,
             self._logical_indices,
-            self._dset_groups
+            self._dset_groups,
+            self._snippet_len_weights
         )
-        for fname, clip_snippets, logical_indices, dset_groups in iterator:
+        for fname, clip_snippets, logical_indices, dset_groups, snippet_len_weights in iterator:
             with h5py.File(fname, 'r') as dset:
                 self._dset_indices.append(self._total_len)
                 dset_start_rollouts = dset['n_start_rollouts'][...]
@@ -302,6 +309,10 @@ class ExpertDataset(Dataset):
                 n_start_rollouts = dset_start_rollouts if self._n_start_rollouts < 0 else min(self._n_start_rollouts, dset_start_rollouts)
                 n_rsi_rollouts = dset_rsi_rollouts if self._n_rsi_rollouts < 0 else min(self._n_rsi_rollouts, dset_rsi_rollouts)
                 for snippet in clip_snippets:
+                    _, start, end = snippet.split('-')
+                    clip_len = int(end)-int(start)
+                    snippet_weight = int(self._max_clip_len / clip_len * MULTIPLIER) if self._clip_len_upsampling else 1
+
                     len_iterator = itertools.chain(
                         dset[f"{snippet}/start_metrics/episode_lengths"][:n_start_rollouts],
                         dset[f"{snippet}/rsi_metrics/episode_lengths"][:n_rsi_rollouts]
@@ -309,9 +320,10 @@ class ExpertDataset(Dataset):
                     for i, ep_len in enumerate(len_iterator):
                         logical_indices.append(self._total_len)
                         dset_groups.append(f"{snippet}/{i if i < n_start_rollouts else i-n_start_rollouts+dset_start_rollouts}")
+                        snippet_len_weights.append(snippet_weight)
                         if ep_len < self._min_seq_steps:
                             continue
-                        self._total_len += ep_len - (self._min_seq_steps-1)
+                        self._total_len += snippet_weight * (ep_len - (self._min_seq_steps-1))
 
     def _compute_offset(self, array: np.ndarray):
         """
@@ -347,16 +359,16 @@ class ExpertDataset(Dataset):
         act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
         val_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/values"]
         adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
+        snippet_len_weight = self._snippet_len_weights[dset_idx][clip_idx]
 
+        start_idx = int((idx - self._logical_indices[dset_idx][clip_idx]) / snippet_len_weight)
         if self.is_sequential:
-            start_idx = idx - self._logical_indices[dset_idx][clip_idx]
             end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
             all_obs = obs_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
         else:
-            rel_idx = idx - self._logical_indices[dset_idx][clip_idx]
-            all_obs = obs_dset[rel_idx]
-            act = act_dset[rel_idx]
+            all_obs = obs_dset[start_idx]
+            act = act_dset[start_idx]
 
         if self._normalize_obs:
             all_obs = (all_obs - self.obs_mean) / self.obs_std
@@ -385,11 +397,11 @@ class ExpertDataset(Dataset):
             if self.is_sequential:
                 weight = weight * np.ones(end_idx-start_idx)
         else: # state-action weight
-            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[rel_idx]
+            adv = adv_dset[start_idx:end_idx] if self.is_sequential else adv_dset[start_idx]
             if self._advantage_weights:
                 energy = adv - self._advantage_offset
             else:
-                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[rel_idx]
+                val = val_dset[start_idx:end_idx] if self.is_sequential else val_dset[start_idx]
                 energy = val + adv - self._q_value_offset
             weight = np.exp(energy / self._temperature)
 

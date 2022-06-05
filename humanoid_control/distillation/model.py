@@ -529,7 +529,6 @@ class NpmpPolicy(BasePolicy):
         deterministic: bool = False
     ):
         embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
         embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
         return embed, embed_distribution
@@ -782,7 +781,6 @@ class McpPolicy(BasePolicy):
         deterministic: bool = False
     ):
         embed_distribution = self.reference_encoder(ref_encoder_input, prev_embed)
-        #embed_gaussian = Independent(Normal(self.embedding_correlation*prev_embed, self.embedding_std_dev), 1)
         embed = embed_distribution.mean if deterministic else embed_distribution.rsample()
 
         return embed, embed_distribution
@@ -984,8 +982,6 @@ class GPT(nn.Module):
 
         self.block_size = config.block_size
         self.apply(self._init_weights)
-
-        print(f"{self.__class__.__name__} number of parameters: {sum(p.numel() for p in self.parameters())}")
 
     def get_block_size(self):
         return self.block_size

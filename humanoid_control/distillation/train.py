@@ -5,6 +5,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 from absl import flags, app
+import torch
 from torch.utils.data.dataloader import DataLoader
 import ml_collections
 from ml_collections.config_flags import config_flags
@@ -31,6 +32,7 @@ flags.DEFINE_integer("train_rsi_rollouts", -1, "Number of RSI rollouts to consid
 flags.DEFINE_integer("val_start_rollouts", -1, "Number of start rollouts to consider in validation set")
 flags.DEFINE_integer("val_rsi_rollouts", -1, "Number of RSI rollouts to consider in validation set")
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
+flags.DEFINE_bool("clip_len_upsampling", False, "Compensate for shorter clips by upsampling")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
 flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics, if desired")
 
@@ -150,6 +152,7 @@ def main(_):
         n_start_rollouts=FLAGS.train_start_rollouts,
         n_rsi_rollouts=FLAGS.train_rsi_rollouts,
         normalize_obs=False, #FLAGS.normalize_obs,
+        clip_len_upsampling=FLAGS.clip_len_upsampling,
         clip_weighted=FLAGS.clip_weighted,
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
@@ -170,6 +173,7 @@ def main(_):
             n_start_rollouts=FLAGS.val_start_rollouts,
             n_rsi_rollouts=FLAGS.val_rsi_rollouts,
             normalize_obs=False, #FLAGS.normalize_obs,
+            clip_len_upsampling=FLAGS.clip_len_upsampling,
             clip_weighted=FLAGS.clip_weighted,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
@@ -261,7 +265,8 @@ def main(_):
     csv_logger = pl.loggers.CSVLogger(output_dir, name='logs', version='')
     tb_logger = pl.loggers.TensorBoardLogger(output_dir, name='logs', version='')
     gpus = -1 if FLAGS.gpus is None else [int(x) for x in FLAGS.gpus]
-    strategy = 'ddp' if gpus == -1 or len(gpus) > 1 else None
+    multigpu = (gpus == -1 and torch.cuda.device_count() > 1) or (gpus != -1 and len(gpus) > 1)
+    strategy = 'ddp' if multigpu else None
     trainer = pl.Trainer(
         default_root_dir=output_dir,
         gpus=gpus,
@@ -269,7 +274,7 @@ def main(_):
         strategy=strategy,
         track_grad_norm=2 if FLAGS.track_grad_norm else -1,
         max_steps=FLAGS.n_steps,
-        max_time=timedelta(hours=FLAGS.n_hours) if FLAGS.n_steps is None else None,
+        max_time=timedelta(hours=FLAGS.n_hours),
         gradient_clip_val=FLAGS.max_grad_norm,
         progress_bar_refresh_rate=FLAGS.progress_bar_refresh_rate,
         val_check_interval=FLAGS.validation_freq if val_loader is not None else None,
