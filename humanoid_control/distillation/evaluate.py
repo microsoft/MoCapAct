@@ -6,7 +6,6 @@ from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import torch
 import imageio
 
-from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.viewer import application
 
 from humanoid_control import utils
@@ -79,7 +78,6 @@ def main(_):
             vec_monitor_cls=wrappers.MocapTrackingVecMonitor
         )
 
-    if FLAGS.n_eval_episodes > 0:
         record_video = FLAGS.video_save_path is not None
         ep_rews, ep_lens, ep_norm_rews, ep_norm_lens, ep_frames = evaluation.evaluate_locomotion_policy(
             policy,
@@ -99,7 +97,7 @@ def main(_):
         if FLAGS.eval_save_path is not None:
             Path(osp.dirname(FLAGS.eval_save_path)).mkdir(parents=True, exist_ok=True)
             np.savez(
-                osp.join(FLAGS.eval_save_path),
+                FLAGS.eval_save_path,
                 ep_rews=ep_rews,
                 ep_lens=ep_lens,
                 ep_norm_rews=ep_norm_rews,
@@ -124,7 +122,7 @@ def main(_):
             return action
 
         viewer_app = application.Application(title='Explorer', width=1280, height=720)
-        viewer_app.launch(environment_loader=env._env, policy=policy_fn)
+        viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':
     app.run(main)
