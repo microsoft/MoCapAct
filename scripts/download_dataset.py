@@ -19,7 +19,7 @@ def download_dataset_from_url(dataset_url=DATASET_URL, local_dest_path='./data',
     for file in files:
         file_path = os.path.join(local_dest_path, file)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        blob_connector.download_and_save_blob(file, file_path)
+        blob_connector.download_and_save_blob(file, file_path, max_concurrency=4)
 
     return local_dest_path
 

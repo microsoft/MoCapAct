@@ -7,6 +7,7 @@ from dm_control.locomotion.mocap import cmu_mocap_data, loader
 from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.locomotion.tasks.reference_pose.tracking import _MAX_END_STEP
 
+from tqdm import tqdm
 from typing import List, Text
 
 def str_to_callable(callable_name):
@@ -76,7 +77,7 @@ class AzureBlobConnector():
         elif connection_string and container_name:
             self.container_client = ContainerClient.from_connection_string(connection_string, container_name, retry_policy=retry_policy)
         else:
-            raise Exception('No storage account credentials passed.')
+            print('No storage account credentials passed.')
 
     def create_container(self) -> None:
         self.container_client.create_container()
@@ -90,7 +91,10 @@ class AzureBlobConnector():
         blob_client = self.container_client.get_blob_client(blob_name)
         with open(local_file_path, 'wb') as local_file:
             download_stream = blob_client.download_blob(max_concurrency=max_concurrency)
-            local_file.write(download_stream.readall())
+            pbar = tqdm(total=download_stream.size, unit='bytes')
+            for chunk in download_stream.chunks():
+                local_file.write(chunk)
+                pbar.update(len(chunk))
 
     def list_blobs(self):
         return self.container_client.list_blobs()
