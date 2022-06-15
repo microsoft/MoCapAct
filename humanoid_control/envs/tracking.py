@@ -21,6 +21,8 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         task_kwargs: Optional[Dict[str, Any]] = None,
         environment_kwargs: Optional[Dict[str, Any]] = None,
         act_noise: float = 0.,
+        enable_all_proprios: bool = False,
+        enable_cameras: bool = False,
 
         # for rendering
         width: int = 640,
@@ -28,6 +30,8 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         camera_id: int = 3
     ):
         self._dataset = dataset or types.ClipCollection(ids=['CMU_016_22'])
+        self._enable_all_proprios = enable_all_proprios
+        self._enable_cameras = enable_cameras
         task_kwargs = task_kwargs or dict()
         task_kwargs['ref_path'] = cmu_mocap_data.get_path_for_cmu(version='2020')
         task_kwargs['dataset'] = self._dataset
@@ -45,18 +49,47 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
     def _get_walker(self):
         return cmu_humanoid.CMUHumanoidPositionControlledV2020
 
+    def _create_env(
+        self,
+        task_type,
+        task_kwargs,
+        environment_kwargs,
+        act_noise=0.,
+        arena_size=(8., 8.)
+    ):
+        env = super()._create_env(task_type, task_kwargs, environment_kwargs, act_noise, arena_size)
+        walker = env._task._walker
+        if self._enable_all_proprios:
+            walker.observables.enable_all()
+            walker.observables.prev_action.enabled = False # this observable is not implemented
+            if not self._enable_cameras:
+                # TODO: procedurally find the cameras
+                walker.observables.egocentric_camera.enabled = False
+                walker.observables.body_camera.enabled = False
+            env.reset()
+        return env
+
     def _create_observation_space(self) -> spaces.Dict:
         obs_spaces = dict()
         for k, v in self._env.observation_spec().items():
-            if v.dtype == np.int64: # clip ID
-                obs_spaces[k] = spaces.Discrete(len(self._dataset.ids))
-            elif np.prod(v.shape) > 0:
+            if v.dtype == np.float64 and np.prod(v.shape) > 0:
+                if np.prod(v.shape) > 0:
+                    obs_spaces[k] = spaces.Box(
+                        -np.infty,
+                        np.infty,
+                        shape=(np.prod(v.shape),),
+                        dtype=np.float32
+                    )
+            elif v.dtype == np.uint8:
+                tmp = v.generate_value()
                 obs_spaces[k] = spaces.Box(
-                    -np.infty,
-                    np.infty,
-                    shape=(np.prod(v.shape),),
-                    dtype=np.float32
+                    v.minimum.item(),
+                    v.maximum.item(),
+                    shape=tmp.shape,
+                    dtype=np.uint8
                 )
+            elif v.dtype == np.int64: # clip ID
+                obs_spaces[k] = spaces.Discrete(len(self._dataset.ids))
         return spaces.Dict(obs_spaces)
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:

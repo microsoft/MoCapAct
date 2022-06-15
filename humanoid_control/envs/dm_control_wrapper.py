@@ -161,18 +161,33 @@ class DmControlWrapper(core.Env):
     def _create_observation_space(self) -> spaces.Dict:
         obs_spaces = dict()
         for k, v in self._env.observation_spec().items():
-            if np.prod(v.shape) > 0:
+            if v.dtype == np.float64 and np.prod(v.shape) > 0:
+                if np.prod(v.shape) > 0:
+                    obs_spaces[k] = spaces.Box(
+                        -np.infty,
+                        np.infty,
+                        shape=(np.prod(v.shape),),
+                        dtype=np.float32
+                    )
+            elif v.dtype == np.uint8:
+                tmp = v.generate_value()
                 obs_spaces[k] = spaces.Box(
-                    -np.infty,
-                    np.infty,
-                    shape=(np.prod(v.shape),),
-                    dtype=np.float32
+                    v.minimum.item(),
+                    v.maximum.item(),
+                    shape=tmp.shape,
+                    dtype=np.uint8
                 )
         return spaces.Dict(obs_spaces)
 
     def get_observation(self, time_step: TimeStep) -> Dict[str, np.ndarray]:
-        obs = time_step.observation
-        return {k: obs[k].ravel() for k in self.observation_space.spaces}
+        dm_obs = time_step.observation
+        obs = dict()
+        for k in self.observation_space.spaces:
+            if self.observation_space[k].dtype == np.uint8: # image
+                obs[k] = dm_obs[k].squeeze()
+            else:
+                obs[k] = dm_obs[k].ravel().astype(self.observation_space[k].dtype)
+        return obs
 
     def step(self, action: np.ndarray) -> Tuple[Dict[str, np.ndarray], float, bool, Dict[str, Any]]:
         assert self.action_space.contains(action)
