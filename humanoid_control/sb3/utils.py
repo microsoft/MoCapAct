@@ -5,7 +5,7 @@ import zipfile
 import pickle
 import json
 import typing
-from typing import Callable, Dict, Text, Tuple, Union
+from typing import Callable, Dict, Optional, Text, Tuple, Union
 
 from stable_baselines3 import PPO
 from humanoid_control.sb3 import features_extractor
@@ -23,7 +23,8 @@ def load_policy(
     model_path: Text,
     observable_keys: Union[Tuple[Text], Dict[Text, Text]],
     rl_alg_type: Callable[..., 'stable_baselines3.BaseAlgorithm'] = PPO,
-    device: Union[torch.device, str] = 'auto'
+    device: Union[torch.device, str] = 'auto',
+    seed: Optional[int] = None,
 ) -> 'stable_baselines3.BaseAlgorithm':
     # Normalization statistics
     with open(osp.join(model_path, 'vecnormalize.pkl'), 'rb') as f:
@@ -50,7 +51,7 @@ def load_policy(
     model = rl_alg_type.load(
         osp.join(model_path, 'best_model.zip'),
         device=device,
-        custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0., seed=None)
+        custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0., seed=seed)
     )
 
     return model
