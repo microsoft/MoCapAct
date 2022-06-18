@@ -27,6 +27,7 @@ MIN_STEPS = 10
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_root", None, "Directory where experiment results are stored")
 flags.DEFINE_float("act_noise", 0.1, "Action noise in humanoid")
+flags.DEFINE_float("max_embed", 3, "Maximum embed")
 
 # Visualization hyperparameters
 flags.DEFINE_bool("visualize", True, "Whether to visualize via GUI")
@@ -67,7 +68,8 @@ def main(_):
     )
 
     # env for visualization
-    env = wrappers.Embedding(stand.StandUpGymEnv(), embed_dim=20)
+    #env = wrappers.Embedding(stand.StandUpGymEnv(), embed_dim=60)
+    env = wrappers.Embedding(stand.StandUpGymEnv(), embed_max=4., embed_std=1.1, embed_dim=60, include_embed_in_obs=True)
 
     # Normalization statistics
     with open(osp.join(model_path, 'vecnormalize.pkl'), 'rb') as f:
@@ -107,13 +109,14 @@ def main(_):
     @torch.no_grad()
     def policy_fn(time_step):
         nonlocal embed
-        if time_step.step_type == 0:
-            embed = env.np_random.randn(20).astype(np.float32)
+        #if time_step.step_type == 0:
+        if True:
+            embed = 1.1*env.np_random.randn(60).astype(np.float32)
         obs = env.env._get_obs(time_step)
         obs['embedding'] = embed
         action, _ = model.predict(obs, deterministic=False)
-        embed = action[-20:]
-        action = action[:-20]
+        #embed = np.clip(action[-60:], -FLAGS.max_embed, FLAGS.max_embed)
+        #action = action[:-60]
         return action
 
     if FLAGS.visualize:

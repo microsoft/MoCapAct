@@ -14,6 +14,7 @@ from stable_baselines3.common.type_aliases import GymEnv, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 from stable_baselines3.common.vec_env import VecNormalize
 
+from humanoid_control.joint import model
 
 class PPOBC(PPO):
     """
@@ -22,7 +23,7 @@ class PPOBC(PPO):
 
     def __init__(
         self,
-        policy: Union[str, Type[ActorCriticPolicy]],
+        policy: model.HierarchicalPolicy,
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         n_steps: int = 2048,
@@ -33,11 +34,12 @@ class PPOBC(PPO):
         clip_range: Union[float, Schedule] = 0.2,
         clip_range_vf: Union[None, float, Schedule] = None,
         normalize_advantage: bool = True,
-        kl_coef: float = 0.,
+        ent_coef: float = 0.,
         vf_coef: float = 0.5,
         bc_coef: float = 0.0,
         max_grad_norm: float = 0.5,
         bc_dataloader: Optional[torch.utils.data.DataLoader] = None,
+        bc_freq: int = 100,
         target_kl: Optional[float] = None,
         tensorboard_log: Optional[str] = None,
         create_eval_env: bool = False,
@@ -59,7 +61,7 @@ class PPOBC(PPO):
             clip_range=clip_range,
             clip_range_vf=clip_range_vf,
             normalize_advantage=normalize_advantage,
-            ent_coef=0.,
+            ent_coef=ent_coef,
             vf_coef=vf_coef,
             max_grad_norm=max_grad_norm,
             target_kl=target_kl,
@@ -72,9 +74,11 @@ class PPOBC(PPO):
             _init_setup_model=_init_setup_model
         )
 
-        self.kl_coef = kl_coef
+        # Behavior cloning properties
         self.bc_coef = bc_coef
         self.bc_dataloader = bc_dataloader
+        self.bc_freq = bc_freq
+        self.bc_ctr = 0
         if self.bc_dataloader:
             self.bc_generator = iter(self.bc_dataloader)
 
@@ -89,16 +93,17 @@ class PPOBC(PPO):
         self.policy.set_training_mode(True)
         # Update optimizer learning rate
         self._update_learning_rate(self.policy.optimizer)
+        # Update action noise
+        #self._update_act_noise()
         # Compute current clip range
         clip_range = self.clip_range(self._current_progress_remaining)
         # Optional: clip range for the value function
         if self.clip_range_vf is not None:
             clip_range_vf = self.clip_range_vf(self._current_progress_remaining)
 
-        pg_losses, value_losses = [], []
-        bc_losses = []
-        embedding_kls = []
-        bc_kls, bc_mses, bc_embed_stds, bc_embed_dists = [], [], [], []
+        entropy_losses = []
+        pg_losses, value_losses, bc_losses = [], [], []
+        bc_kls, bc_weighted_logp_losses, bc_mses, bc_delta_embed_means, bc_delta_embed_stds, bc_embed_means, bc_embed_stds = [], [], [], [], [], [], []
         clip_fractions = []
 
         continue_training = True
@@ -110,19 +115,13 @@ class PPOBC(PPO):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
                 actions = rollout_data.actions
 
-                values, log_prob, embed_gaussian = self.policy.evaluate_actions(rollout_data.observations, actions)
-                prev_embed = rollout_data.observations['embedding']
-                if isinstance(self.env, VecNormalize) and 'embedding' in self.env.norm_obs_keys:
-                    prev_embed = torch.tensor(self.env._unnormalize_obs(prev_embed.cpu().numpy(), self.env.obs_rms['embedding']), device=prev_embed.device)
-                prior_gaussian = Independent(Normal(self.policy.embedding_correlation*prev_embed, self.policy.embedding_std_dev), -1)
-                kl_div = kl_divergence(embed_gaussian, prior_gaussian).mean()
+                values, log_prob, entropy = self.policy.evaluate_actions(rollout_data.observations, actions)
+
                 values = values.flatten()
                 # Normalize advantage
                 advantages = rollout_data.advantages
                 if self.normalize_advantage:
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
-                embedding_kls.append(kl_div.item())
 
                 # ratio between old and new policy, should be one at the first iteration
                 ratio = torch.exp(log_prob - rollout_data.old_log_prob)
@@ -150,8 +149,17 @@ class PPOBC(PPO):
                 value_loss = F.mse_loss(rollout_data.returns, values_pred)
                 value_losses.append(value_loss.item())
 
+                # Entropy loss favor exploration
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -torch.mean(-log_prob)
+                else:
+                    entropy_loss = -torch.mean(entropy)
+
+                entropy_losses.append(entropy_loss.item())
+
                 # Behavior cloning loss
-                if self.bc_dataloader:
+                if self.bc_dataloader and self.bc_ctr % self.bc_freq == 0:
                     try:
                         # sample the batch
                         obs_bc, act_bc, weights = next(self.bc_generator)
@@ -160,20 +168,25 @@ class PPOBC(PPO):
                         self.bc_generator = iter(self.bc_dataloader)
                         obs_bc, act_bc, weights = next(self.bc_generator)
                     #obs_bc = self.env.normalize_obs({k: v.numpy() for k, v in obs_bc.items()})
+                    # TODO: check that obs_rms in dataloader is being updated
                     obs_bc = {k: torch.tensor(v, device=self.device) for k, v in obs_bc.items()}
                     act_bc = act_bc.to(self.device)
                     weights = weights.to(self.device)
-                    bc_loss, kl_bc, mse_bc, embed_std_bc, embed_dist_bc = self.policy.compute_bc_loss(obs_bc, act_bc, weights)
+                    bc_output = self.policy.compute_bc_loss(obs_bc, act_bc, weights)
+                    bc_loss, weighted_log_prob_loss, kl_bc, mse_bc, delta_embed_mean, delta_embed_std, embed_mean, embed_std = bc_output
                     bc_losses.append(bc_loss.item())
+                    bc_weighted_logp_losses.append(weighted_log_prob_loss)
                     bc_kls.append(kl_bc.item())
-                    bc_mses.append(mse_bc.item())
-                    bc_embed_stds.append(embed_std_bc.item())
-                    bc_embed_dists.append(embed_dist_bc.item())
+                    bc_mses.append(mse_bc)
+                    bc_delta_embed_means.append(delta_embed_mean)
+                    bc_delta_embed_stds.append(delta_embed_std)
+                    bc_embed_means.append(embed_mean)
+                    bc_embed_stds.append(embed_std)
                 else:
                     bc_loss = 0.
-                    bc_losses.append(bc_loss)
+                    #bc_losses.append(bc_loss)
 
-                loss = policy_loss + self.kl_coef * torch.mean(kl_div) + self.vf_coef * value_loss + self.bc_coef * bc_loss
+                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + self.bc_freq*self.bc_coef * bc_loss
 
                 # Calculate approximate form of reverse KL Divergence for early stopping
                 # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417
@@ -197,6 +210,8 @@ class PPOBC(PPO):
                 torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                 self.policy.optimizer.step()
 
+                self.bc_ctr += 1
+
             if not continue_training:
                 break
 
@@ -209,7 +224,6 @@ class PPOBC(PPO):
         self.logger.record("train/approx_kl", np.mean(approx_kl_divs))
         self.logger.record("train/clip_fraction", np.mean(clip_fractions))
         self.logger.record("train/loss", loss.item())
-        self.logger.record("train/embedding_kl", np.mean(embedding_kls))
         self.logger.record("train/explained_variance", explained_var)
         if hasattr(self.policy, "log_std"):
             self.logger.record("train/std", torch.exp(self.policy.log_std).mean().item())
@@ -219,8 +233,12 @@ class PPOBC(PPO):
         if self.clip_range_vf is not None:
             self.logger.record("train/clip_range_vf", clip_range_vf)
 
-        self.logger.record("behavior_cloning/loss", np.mean(bc_losses))
-        self.logger.record("behavior_cloning/mse", np.mean(bc_mses))
-        self.logger.record("behavior_cloning/kl", np.mean(bc_kls))
-        self.logger.record("behavior_cloning/embed_std", np.mean(bc_embed_stds))
-        self.logger.record("behavior_cloning/embed_dist", np.mean(bc_embed_dists))
+        if len(bc_losses) > 0:
+            self.logger.record("behavior_cloning/bc_loss", np.mean(bc_losses))
+            self.logger.record("behavior_cloning/weighted_log_prob_loss", np.mean(bc_weighted_logp_losses))
+            self.logger.record("behavior_cloning/mse", np.mean(bc_mses))
+            self.logger.record("behavior_cloning/kl", np.mean(bc_kls))
+            self.logger.record("behavior_cloning/delta_embed_mean", np.mean(bc_delta_embed_means))
+            self.logger.record("behavior_cloning/delta_embed_std", np.mean(bc_delta_embed_stds))
+            self.logger.record("behavior_cloning/bc_embed_mean", np.mean(bc_embed_means))
+            self.logger.record("behavior_cloning/bc_embed_std", np.mean(bc_embed_stds))
