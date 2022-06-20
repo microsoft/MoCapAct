@@ -11,13 +11,13 @@ from pathlib import Path
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from dm_control.viewer import application
-from humanoid_control import observables
-from humanoid_control.envs import env_util
-from humanoid_control.sb3 import evaluation
-from humanoid_control.sb3 import utils
-from humanoid_control.sb3 import wrappers
-from humanoid_control.envs import tracking
-from humanoid_control.clip_expert import utils as clip_expert_utils
+from mocapact import observables
+from mocapact.envs import env_util
+from mocapact.sb3 import evaluation
+from mocapact.sb3 import utils
+from mocapact.sb3 import wrappers
+from mocapact.envs import tracking
+from mocapact.clip_expert import utils as clip_expert_utils
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_root", None, "Path to the policy")

@@ -8,7 +8,7 @@ import typing
 from typing import Callable, Dict, Optional, Text, Tuple, Union
 
 from stable_baselines3 import PPO
-from humanoid_control.sb3 import features_extractor
+from mocapact.sb3 import features_extractor
 
 if typing.TYPE_CHECKING:
     import stable_baselines3

@@ -15,19 +15,19 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 
 from dm_control.locomotion.tasks.reference_pose import tracking
 
-from humanoid_control import utils
-from humanoid_control.envs import env_util
-from humanoid_control.envs import dm_control_wrapper
-from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import wrappers
-from humanoid_control.sb3 import callbacks
-from humanoid_control.sb3.logger import configure
-from humanoid_control.distillation import model
+from mocapact import utils
+from mocapact.envs import env_util
+from mocapact.envs import dm_control_wrapper
+from mocapact.sb3 import features_extractor
+from mocapact.sb3 import wrappers
+from mocapact.sb3 import callbacks
+from mocapact.sb3.logger import configure
+from mocapact.distillation import model
 
 FLAGS = flags.FLAGS
 # Environment hyperparameters
 flags.DEFINE_integer("episode_steps", 833, "Number of time steps in an episode")
-task_file = "humanoid_control/transfer/config.py"
+task_file = "mocapact/transfer/config.py"
 config_flags.DEFINE_config_file("task", f"{task_file}:go_to_target", "Task")
 
 # Training hyperparameters

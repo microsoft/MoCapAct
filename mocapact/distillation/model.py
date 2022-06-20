@@ -16,9 +16,9 @@ from collections import deque
 
 from stable_baselines3.common import torch_layers
 
-from humanoid_control import utils
-from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3.torch_layers import create_mlp
+from mocapact import utils
+from mocapact.sb3 import features_extractor
+from mocapact.sb3.torch_layers import create_mlp
 
 class BasePolicy(policies.BasePolicy, pl.LightningModule):
     """

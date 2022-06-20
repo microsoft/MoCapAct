@@ -11,14 +11,14 @@ from ml_collections.config_flags import config_flags
 from dm_control.viewer import application
 from dm_control.locomotion.tasks.reference_pose import tracking
 from stable_baselines3.common.utils import obs_as_tensor
-from humanoid_control.sb3 import features_extractor
-from humanoid_control.envs import dm_control_wrapper
-from humanoid_control.distillation import model
+from mocapact.sb3 import features_extractor
+from mocapact.envs import dm_control_wrapper
+from mocapact.distillation import model
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("model_root", None, "Directory where policy is stored")
 flags.DEFINE_float("max_embed", 3.5, "Maximum embed")
-task_file = "humanoid_control/transfer/config.py"
+task_file = "mocapact/transfer/config.py"
 config_flags.DEFINE_config_file("task", f"{task_file}:go_to_target", "Task")
 
 # Visualization hyperparameters

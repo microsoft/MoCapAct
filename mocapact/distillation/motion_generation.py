@@ -11,12 +11,12 @@ from stable_baselines3.common import evaluation
 
 from dm_control.viewer import application
 
-from humanoid_control import observables
-from humanoid_control import utils
-from humanoid_control.envs import env_util
-from humanoid_control.envs import motion_generation
-from humanoid_control.sb3 import utils as sb3_utils
-from humanoid_control.distillation.model import NpmpPolicy
+from mocapact import observables
+from mocapact import utils
+from mocapact.envs import env_util
+from mocapact.envs import motion_generation
+from mocapact.sb3 import utils as sb3_utils
+from mocapact.distillation.model import NpmpPolicy
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_path", None, "Path where saved policy is stored")

@@ -1,7 +1,7 @@
 from turtle import speed
 from ml_collections import ConfigDict
 from dm_control.locomotion.tasks import go_to_target
-from humanoid_control.tasks import speed_control
+from mocapact.tasks import speed_control
 
 def get_config(task_string):
     tasks = {

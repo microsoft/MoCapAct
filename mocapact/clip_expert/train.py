@@ -16,15 +16,15 @@ from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize
 from stable_baselines3.common.utils import get_device
 
-from humanoid_control import observables
-from humanoid_control import utils
-from humanoid_control.envs import env_util
-from humanoid_control.envs import tracking
-from humanoid_control.sb3 import features_extractor
-from humanoid_control.sb3 import utils as sb3_utils
-from humanoid_control.sb3 import wrappers
-from humanoid_control.clip_expert import callbacks
-from humanoid_control.clip_expert import utils as clip_expert_utils
+from mocapact import observables
+from mocapact import utils
+from mocapact.envs import env_util
+from mocapact.envs import tracking
+from mocapact.sb3 import features_extractor
+from mocapact.sb3 import utils as sb3_utils
+from mocapact.sb3 import wrappers
+from mocapact.clip_expert import callbacks
+from mocapact.clip_expert import utils as clip_expert_utils
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("clip_id", None, "Name of reference clip. See cmu_subsets.py")

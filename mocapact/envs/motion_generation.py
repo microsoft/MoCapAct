@@ -6,8 +6,8 @@ from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.locomotion.mocap import cmu_mocap_data
 from dm_control.locomotion.walkers import cmu_humanoid
 
-from humanoid_control.envs import dm_control_wrapper
-from humanoid_control.tasks import motion_generation
+from mocapact.envs import dm_control_wrapper
+from mocapact.tasks import motion_generation
 
 class MotionGenerationGymEnv(dm_control_wrapper.DmControlWrapper):
     def __init__(

@@ -9,7 +9,7 @@ from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.vec_env import VecEnv, sync_envs_normalization
 
-from humanoid_control.sb3 import evaluation
+from mocapact.sb3 import evaluation
 
 class NormalizedRolloutCallback(BaseCallback):
     """

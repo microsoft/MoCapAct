@@ -7,7 +7,7 @@ from dm_control.locomotion.tasks.reference_pose import types
 from dm_control.locomotion.tasks.reference_pose import tracking
 from dm_control.locomotion.walkers import cmu_humanoid
 
-from humanoid_control.envs import dm_control_wrapper
+from mocapact.envs import dm_control_wrapper
 
 class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
     """

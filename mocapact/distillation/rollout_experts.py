@@ -94,11 +94,11 @@ from pathlib import Path
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
-from humanoid_control import observables
-from humanoid_control.envs import env_util
-from humanoid_control.envs import tracking
-from humanoid_control.sb3 import utils
-from humanoid_control.sb3 import wrappers
+from mocapact import observables
+from mocapact.envs import env_util
+from mocapact.envs import tracking
+from mocapact.sb3 import utils
+from mocapact.sb3 import wrappers
 
 logging.set_verbosity(logging.WARNING)
 

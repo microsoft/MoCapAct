@@ -7,7 +7,7 @@ import gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 
-from humanoid_control import observables
+from mocapact import observables
 
 class CmuHumanoidFeaturesExtractor(BaseFeaturesExtractor):
     def __init__(

@@ -1,8 +1,8 @@
 from ml_collections import ConfigDict
-from humanoid_control import observables
+from mocapact import observables
 
 def prepend_model(name):
-    return "humanoid_control.distillation.model." + name
+    return "mocapact.distillation.model." + name
 
 def get_config(config_string):
     configs = {

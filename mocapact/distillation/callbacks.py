@@ -8,11 +8,11 @@ from pytorch_lightning.callbacks import Callback
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 
 from dm_control.locomotion.tasks.reference_pose import types
-from humanoid_control.envs import env_util
-from humanoid_control.envs import tracking
-from humanoid_control.sb3 import evaluation
-from humanoid_control.sb3 import wrappers
-from humanoid_control import utils
+from mocapact.envs import env_util
+from mocapact.envs import tracking
+from mocapact.sb3 import evaluation
+from mocapact.sb3 import wrappers
+from mocapact import utils
 
 class PolicyEvaluationCallback(Callback):
     """

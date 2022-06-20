@@ -13,10 +13,10 @@ import pytorch_lightning as pl
 
 from stable_baselines3.common.running_mean_std import RunningMeanStd
 
-from humanoid_control import observables
-from humanoid_control import utils
-from humanoid_control.distillation import callbacks
-from humanoid_control.distillation import dataset
+from mocapact import observables
+from mocapact import utils
+from mocapact.distillation import callbacks
+from mocapact.distillation import dataset
 
 FLAGS = flags.FLAGS
 
@@ -52,7 +52,7 @@ flags.DEFINE_float("temperature", None, "Weighting temperature")
 flags.DEFINE_bool("keep_hdf5s_open", False, "Whether to keep all HDF5s open (will cause memory leaks!)")
 
 # Model hyperparameters
-config_file = "humanoid_control/distillation/config.py"
+config_file = "mocapact/distillation/config.py"
 config_flags.DEFINE_config_file("model", f"{config_file}:mlp_time_index", "Model architecture")
 flags.DEFINE_list("gpus", None, "GPU configuration (https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#gpus)")
 flags.DEFINE_bool("normalize_obs", False, "Whether to normalize the input observation")

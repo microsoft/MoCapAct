@@ -4,7 +4,7 @@ import gym
 from gym import spaces
 from copy import deepcopy
 
-from humanoid_control.observables import EMBEDDING_OBSERVABLE
+from mocapact.observables import EMBEDDING_OBSERVABLE
 
 
 class Embedding(gym.Wrapper):
