@@ -43,11 +43,9 @@ flags.DEFINE_integer("n_steps", 4096, "Number of steps per policy optimization")
 flags.DEFINE_integer("n_epochs", 10, "Number of epochs when optimizing the PPO loss")
 flags.DEFINE_integer("batch_size", 256, "Minibatch size for PPO")
 flags.DEFINE_float("clip_range", 0.2, "Clipping parameter for PPO")
-flags.DEFINE_float("target_kl", 0.15, "Limits KL divergence in updating policy")
+flags.DEFINE_float("target_kl", float('inf'), "Limits KL divergence in updating policy")
 flags.DEFINE_float("max_grad_norm", 1., "Clipping value for gradient norm")
 flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
-flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
-flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
 lr_config = ml_collections.ConfigDict()
 lr_config.start_val = 1e-4  # Initial step size
 lr_config.decay_half_life = 0.2  # Half-life for decay rate of learning rate
@@ -105,8 +103,8 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
         vec_monitor_cls=wrappers.MocapTrackingVecMonitor
     )
     env = VecNormalize(env, training=training, gamma=FLAGS.gamma,
-                       norm_obs=FLAGS.normalize_observation,
-                       norm_reward=FLAGS.normalize_reward,
+                       norm_obs=True,
+                       norm_reward=True,
                        norm_obs_keys=observables.MULTI_CLIP_OBSERVABLES_SANS_ID)
     return env
 
