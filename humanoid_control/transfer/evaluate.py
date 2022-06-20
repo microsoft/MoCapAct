@@ -5,23 +5,15 @@ import json
 import numpy as np
 import torch
 from absl import app, flags, logging
-from stable_baselines3 import PPO, SAC
-from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3 import PPO
 from ml_collections.config_flags import config_flags
 
 from dm_control.viewer import application
 from dm_control.locomotion.tasks.reference_pose import tracking
-from humanoid_control import observables
-from humanoid_control import utils
-from stable_baselines3.common import env_util
-from stable_baselines3.common import evaluation
 from stable_baselines3.common.utils import obs_as_tensor
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.envs import dm_control_wrapper
 from humanoid_control.distillation import model
-
-import matplotlib.pyplot as plt
-
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("model_root", None, "Directory where policy is stored")
@@ -81,22 +73,28 @@ def main(_):
         custom_objects=dict(policy_kwargs=policy_kwargs, learning_rate=0., clip_range=0.)
     )
 
-    distilled_model = model.NpmpPolicy.load_from_checkpoint(
-        osp.join(FLAGS.model_root, 'low_level_policy.ckpt'),
-        map_location='cpu'
-    )
-    low_level_policy = distilled_model.low_level_policy
+    if osp.exists(osp.join(FLAGS.model_root, 'low_level_policy.ckpt')):
+        distilled_model = model.NpmpPolicy.load_from_checkpoint(
+            osp.join(FLAGS.model_root, 'low_level_policy.ckpt'),
+            map_location='cpu'
+        )
+        low_level_policy = distilled_model.low_level_policy
+    else:
+        low_level_policy = None
 
     @torch.no_grad()
     def policy_fn(time_step):
         obs = env.get_observation(time_step)
-        embed, _ = high_level_model.predict(obs, deterministic=True)
-        embed = np.clip(embed, -FLAGS.max_embed, FLAGS.max_embed)
-        obs = {k: v.astype(np.float32) for k, v in obs.items()}
-        obs = obs_as_tensor(obs, 'cpu')
-        embed = torch.tensor(embed)
-        action = low_level_policy(obs, embed)
-        action = np.clip(action, -1., 1.)
+        if low_level_policy:
+            embed, _ = high_level_model.predict(obs, deterministic=True)
+            embed = np.clip(embed, -FLAGS.max_embed, FLAGS.max_embed)
+            obs = {k: v.astype(np.float32) for k, v in obs.items()}
+            obs = obs_as_tensor(obs, 'cpu')
+            embed = torch.tensor(embed)
+            action = low_level_policy(obs, embed)
+            action = np.clip(action, -1., 1.)
+        else:
+            action, _ = high_level_model.predict(obs, deterministic=True)
         return action
 
     if FLAGS.visualize:
