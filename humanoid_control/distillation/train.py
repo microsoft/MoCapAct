@@ -22,6 +22,7 @@ FLAGS = flags.FLAGS
 
 # Path flags
 flags.DEFINE_string("output_root", None, "Output directory to save the model and logs")
+flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics")
 flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
 flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
 flags.DEFINE_list("extra_clips", None, "List of clip snippets to additionaly do evaluations on, if desired")
@@ -33,7 +34,6 @@ flags.DEFINE_integer("val_rsi_rollouts", -1, "Number of RSI rollouts to consider
 flags.DEFINE_bool("randomly_load_hdf5", False, "Whether to randomize the order of hdf5 files before loading")
 flags.DEFINE_bool("clip_len_upsampling", False, "Compensate for shorter clips by upsampling")
 flags.DEFINE_integer("save_every_n_minutes", 60, "How often to save latest model")
-flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics, if desired")
 
 # Training hyperparameters
 flags.DEFINE_integer("n_hours", 24, "Number of hours to train")
@@ -75,6 +75,7 @@ config_flags.DEFINE_config_dict("eval", eval_config)
 
 flags.mark_flag_as_required("output_root")
 flags.mark_flag_as_required("train_dataset_paths")
+flags.mark_flag_as_required("dataset_metrics_path")
 
 def main(_):
     output_dir = osp.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
@@ -96,37 +97,8 @@ def main(_):
             f.write(FLAGS.flags_into_string())
         with open(osp.join(output_dir, 'model_constructor.txt'), 'w') as f:
             f.write(FLAGS.model.constructor)
-        if FLAGS.dataset_metrics_path is None:
-            dset = dataset.ExpertDataset(
-                FLAGS.train_dataset_paths,
-                observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
-                FLAGS.clip_ids,
-                min_seq_steps=seq_steps,
-                max_seq_steps=seq_steps,
-                n_start_rollouts=FLAGS.train_start_rollouts,
-                n_rsi_rollouts=FLAGS.train_rsi_rollouts,
-                normalize_obs=False,
-                clip_weighted=FLAGS.clip_weighted,
-                advantage_weights=FLAGS.advantage_weights,
-                temperature=FLAGS.temperature,
-                concat_observables=False
-            )
-            np.savez(
-                osp.join(output_dir, 'dataset_metrics.npz'),
-                obs_mean=dset.obs_mean,
-                obs_var=dset.obs_var,
-                act_mean=dset.act_mean,
-                act_var=dset.act_var,
-                count=dset.count,
-                snippet_returns=dset.snippet_returns,
-                advantages=dset.advantages,
-                values=dset.values
-            )
-            del dset
 
     pl.seed_everything(FLAGS.seed, workers=True)
-
-    dataset_metrics_path = FLAGS.dataset_metrics_path or osp.join(output_dir, 'dataset_metrics.npz')
 
     # If desired, randomize order of dataset paths
     if FLAGS.randomly_load_hdf5:
@@ -138,6 +110,7 @@ def main(_):
     train_dataset = dataset.ExpertDataset(
         FLAGS.train_dataset_paths,
         observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
+        FLAGS.dataset_metrics_path,
         FLAGS.clip_ids,
         min_seq_steps=seq_steps,
         max_seq_steps=seq_steps,
@@ -149,7 +122,6 @@ def main(_):
         advantage_weights=FLAGS.advantage_weights,
         temperature=FLAGS.temperature,
         concat_observables=False,
-        metrics_path=dataset_metrics_path,
         keep_hdf5s_open=FLAGS.keep_hdf5s_open
     )
 
@@ -159,18 +131,17 @@ def main(_):
         val_dataset = dataset.ExpertDataset(
             FLAGS.val_dataset_paths,
             observables.MULTI_CLIP_OBSERVABLES_SANS_ID,
+            FLAGS.dataset_metrics_path,
             FLAGS.clip_ids,
             min_seq_steps=seq_steps,
             max_seq_steps=seq_steps,
             n_start_rollouts=FLAGS.val_start_rollouts,
             n_rsi_rollouts=FLAGS.val_rsi_rollouts,
             normalize_obs=False, #FLAGS.normalize_obs,
-            clip_len_upsampling=FLAGS.clip_len_upsampling,
             clip_weighted=FLAGS.clip_weighted,
             advantage_weights=FLAGS.advantage_weights,
             temperature=FLAGS.temperature,
             concat_observables=False,
-            metrics_path=dataset_metrics_path,
             keep_hdf5s_open=FLAGS.keep_hdf5s_open
         )
         print("Validation set size =", len(val_dataset))
@@ -179,8 +150,8 @@ def main(_):
         obs_rms = {}
         for obs_key, obs_indices in train_dataset.observable_indices.items():
             rms = RunningMeanStd(shape=obs_indices.shape)
-            rms.mean = train_dataset.obs_mean[obs_indices]
-            rms.var = train_dataset.obs_var[obs_indices]
+            rms.mean = train_dataset.proprio_mean[obs_indices]
+            rms.var = train_dataset.proprio_var[obs_indices]
             rms.count = train_dataset.count
             obs_rms[obs_key] = rms
     else:
