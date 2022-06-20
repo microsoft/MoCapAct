@@ -21,14 +21,16 @@ def weighted_average(arrays, weights):
 class ExpertDataset(Dataset):
     def __init__(
         self,
-        h5py_fnames: Sequence[Text],
+        hdf5_fnames: Sequence[Text],
         observables: Union[Sequence[Text], Dict[Text, Sequence[Text]]],
+        metrics_path: Text,
         clip_ids: Optional[Sequence[Text]] = None,
         max_clip_len: int = 210,
         min_seq_steps: int = 1,
         max_seq_steps: int = 1,
         normalize_obs: bool = False,
         normalize_act: bool = False,
+        return_mean_act: bool = True,
         clip_len_upsampling: bool = False,
         n_start_rollouts: int = -1,
         n_rsi_rollouts: int = -1,
@@ -37,36 +39,36 @@ class ExpertDataset(Dataset):
         advantage_weights: bool = True,
         temperature: Optional[float] = None,
         max_weight: float = float('inf'),
-        metrics_path: Optional[Text] = None,
         keep_hdf5s_open: bool = False
     ):
         """
-        h5py_fnames: List of paths to HDF5 files to load.
+        hdf5_fnames: List of paths to HDF5 files to load.
         observables: What observables to return in __getitem__.
-        clip_ids: The clip IDs to consider. If None, considers every clip.
+        metrics_path: The path used to load the dataset metrics.
+        clip_ids: The clip IDs to consider. If None, considers every clip in the dataset.
         min_seq_steps: The minimum number of steps in a returned sequence.
         max_seq_steps: The maximum number of steps in a returned sequence.
         normalize_obs: Whether to normalize the observation.
         normalize_act: Whether to normalize the action.
+        return_mean_act: Whether to return the mean action or sampled action in __getitem__.
         concat_observables: Whether to concatenate the observables in __getitem__.
         clip_weighted: Whether to determine the weights based on the clip or the state-action.
         temperature: The temperature used in the data weighting.
         max_weight: The maximum weight for the data.
-        metrics_path: The path used to load the dataset metrics. Otherwise, calculated manually.
         """
-        self._h5py_fnames = h5py_fnames
+        self._hdf5_fnames = hdf5_fnames
         self._observables = observables
 
         self._keep_hdf5s_open = keep_hdf5s_open
         if self._keep_hdf5s_open:
-            self._dsets = [h5py.File(fname, 'r') for fname in self._h5py_fnames]
+            self._dsets = [h5py.File(fname, 'r') for fname in self._hdf5_fnames]
 
         # Grab all clip snippet information
         # self._clip_snippets separates the snippets by file
         # self._clip_snippets_flat flattens self._clip_snippets
-        # slef._clip_ids is the name of the clip IDs (start and end steps removed)
+        # self._clip_ids is the name of the clip IDs (start and end steps removed)
         self._clip_snippets = []
-        for fname in self._h5py_fnames:
+        for fname in self._hdf5_fnames:
             with h5py.File(fname, 'r') as dset:
                 if clip_ids is None: # get every clip ID in the dataset
                     self._clip_snippets.append(tuple([k for k in dset.keys() if k.startswith('CMU')]))
@@ -85,6 +87,7 @@ class ExpertDataset(Dataset):
         self._max_weight = max_weight
         self._normalize_obs = normalize_obs
         self._normalize_act = normalize_act
+        self._return_mean_act = return_mean_act
         self._clip_len_upsampling = clip_len_upsampling
         self._n_start_rollouts = n_start_rollouts
         self._n_rsi_rollouts = n_rsi_rollouts
@@ -92,7 +95,7 @@ class ExpertDataset(Dataset):
 
         # Grab the reference steps and indices for observables from the first HDF5.
         # We assume those two properties are the same for all the HDF5s.
-        with h5py.File(self._h5py_fnames[0], 'r') as dset:
+        with h5py.File(self._hdf5_fnames[0], 'r') as dset:
             self._ref_steps = dset['ref_steps'][...]
             obs_ind_dset = dset['observable_indices/walker']
             self._observable_indices = {
@@ -129,16 +132,16 @@ class ExpertDataset(Dataset):
         return self._ref_steps
 
     @property
-    def obs_mean(self):
-        return self._obs_mean
+    def proprio_mean(self):
+        return self._proprio_mean
 
     @property
-    def obs_var(self):
-        return self._obs_var
+    def proprio_var(self):
+        return self._proprio_var
 
     @property
-    def obs_std(self):
-        return self._obs_std
+    def proprio_std(self):
+        return self._proprio_std
 
     @property
     def act_mean(self):
@@ -185,7 +188,6 @@ class ExpertDataset(Dataset):
             k: spaces.Box(-np.infty, np.infty, shape=v.shape, dtype=np.float32)
             for k, v in self.observable_indices.items()
         }
-        obs_spaces['walker/clip_id'] = spaces.Discrete(len(self._clip_snippets_flat))
         self._full_observation_space = spaces.Dict(obs_spaces)
 
         # Observation space for the observables we're considering
@@ -210,7 +212,7 @@ class ExpertDataset(Dataset):
             }
 
         # Action space
-        with h5py.File(self._h5py_fnames[0], 'r') as dset:
+        with h5py.File(self._hdf5_fnames[0], 'r') as dset:
             self._action_space = spaces.Box(
                 low=np.float32(-1.),
                 high=np.float32(1.),
@@ -219,80 +221,47 @@ class ExpertDataset(Dataset):
             )
 
     def _set_stats(self):
-        if self._metrics_path is not None:
-            metrics = np.load(self._metrics_path, allow_pickle=True)
-            self._count = metrics['count']
-            self._obs_mean = metrics['obs_mean']
-            self._obs_var = metrics['obs_var']
+        metrics = np.load(self._metrics_path, allow_pickle=True)
+        self._count = metrics['count']
+        self._proprio_mean = metrics['proprio_mean']
+        self._proprio_var = metrics['proprio_var']
+        if self._return_mean_act:
+            self._act_mean = metrics['mean_act_mean']
+            self._act_var = metrics['mean_act_var']
+        else:
             self._act_mean = metrics['act_mean']
             self._act_var = metrics['act_var']
-            self._snippet_returns = metrics['snippet_returns'].item()
-            self._advantages = metrics['advantages']
-            self._values = metrics['values']
-        else:
-            counts, obs_means, obs_vars, act_means, act_vars = [], [], [], [], []
-            snippet_returns = dict()
-            all_advantages, all_values = [], []
-            for fname, clip_snippets in zip(self._h5py_fnames, self._clip_snippets):
-                with h5py.File(fname, 'r') as dset:
-                    counts.append(dset['stats/count'][...])
-                    obs_means.append(dset['stats/obs_mean'][...])
-                    obs_vars.append(dset['stats/obs_var'][...])
-                    act_means.append(dset['stats/act_mean'][...])
-                    act_vars.append(dset['stats/act_var'][...])
-                    for snippet in clip_snippets:
-                        ret_iterator = itertools.chain(
-                            dset[f"{snippet}/start_metrics/norm_episode_returns"],
-                            dset[f"{snippet}/rsi_metrics/norm_episode_returns"]
-                        )
-                        returns = list(ret_iterator)
-                        snippet_returns[snippet] = np.mean(returns)
+        self._snippet_returns = metrics['snippet_returns'].item()
+        self._advantages = {k: v for k, v in metrics['advantages'].item().items() if k in self._clip_snippets_flat}
+        self._values = {k: v for k, v in metrics['values'].item().items() if k in self._clip_snippets_flat}
 
-                        n_rollouts = dset["n_start_rollouts"][...] + dset["n_random_rollouts"][...]
-                        for i in range(n_rollouts):
-                            all_advantages.append(dset[f"{snippet}/{i}/advantages"][...])
-                            all_values.append(dset[f"{snippet}/{i}/values"][...])
+        self._proprio_std = (np.sqrt(self.proprio_var) + 1e-4).astype(np.float32)
+        self._act_std = (np.sqrt(self.act_var) + 1e-4).astype(np.float32)
 
-            self._count = np.sum(counts)
-            obs_second_moments = [var + mean**2 for mean, var in zip(obs_means, obs_vars)]
-            act_second_moments = [var + mean**2 for mean, var in zip(act_means, act_vars)]
-            self._obs_mean = weighted_average(obs_means, counts).astype(np.float32)
-            self._obs_var = np.clip(
-                weighted_average(obs_second_moments, counts) - self._obs_mean**2,
-                0., None
-            ).astype(np.float32)
-            self._act_mean = weighted_average(act_means, counts).astype(np.float32)
-            self._act_var = np.clip(
-                weighted_average(act_second_moments, counts) - self._act_mean**2,
-                0., None
-            ).astype(np.float32)
+        # Put observation statistics into RunningMeanStd objects
+        self._obs_rms = dict()
+        with h5py.File(self._hdf5_fnames[0], 'r') as dset:
+            for k in dset['observable_indices/walker'].keys():
+                key = "walker/" + k
+                obs_rms = RunningMeanStd()
+                obs_rms.mean = self.proprio_mean[self.observable_indices[key]]
+                obs_rms.var = self.proprio_var[self.observable_indices[key]]
+                obs_rms.count = self._count
+                self._obs_rms[key] = obs_rms
 
-            self._snippet_returns = dict(sorted(snippet_returns.items()))
-            self._advantages = np.concatenate(all_advantages)
-            self._values = np.concatenate(all_values)
-
-        self._obs_std = (np.sqrt(self._obs_var) + 1e-4).astype(np.float32)
-        self._act_std = (np.sqrt(self._act_var) + 1e-4).astype(np.float32)
-
-        self._obs_rms = {}
-        for k in observables.MULTI_CLIP_OBSERVABLES_SANS_ID:
-            obs_rms = RunningMeanStd()
-            obs_rms.mean = self.obs_mean[self.observable_indices[k]]
-            obs_rms.var = self.obs_var[self.observable_indices[k]]
-            obs_rms.count = self._count
-            self._obs_rms[k] = obs_rms
-
-        self._return_offset = self._compute_offset(np.array(list(self._snippet_returns.values())))
-        self._advantage_offset = self._compute_offset(self.advantages)
-        self._q_value_offset = self._compute_offset(self.values + self.advantages)
+        snippet_returns = np.array(list(self.snippet_returns.values()))
+        advantages, values = [np.concatenate(list(x.values())) for x in [self.advantages, self.values]]
+        self._return_offset = self._compute_offset(snippet_returns)
+        self._advantage_offset = self._compute_offset(advantages)
+        self._q_value_offset = self._compute_offset(values + advantages)
 
     def _create_offsets(self):
         self._total_len = 0
         self._dset_indices = []
-        self._logical_indices, self._dset_groups = [[] for _ in self._h5py_fnames], [[] for _ in self._h5py_fnames]
-        self._snippet_len_weights = [[] for _ in self._h5py_fnames]
+        self._logical_indices, self._dset_groups = [[] for _ in self._hdf5_fnames], [[] for _ in self._hdf5_fnames]
+        self._snippet_len_weights = [[] for _ in self._hdf5_fnames]
         iterator = zip(
-            self._h5py_fnames,
+            self._hdf5_fnames,
             self._clip_snippets,
             self._logical_indices,
             self._dset_groups,
@@ -302,7 +271,7 @@ class ExpertDataset(Dataset):
             with h5py.File(fname, 'r') as dset:
                 self._dset_indices.append(self._total_len)
                 dset_start_rollouts = dset['n_start_rollouts'][...]
-                dset_rsi_rollouts = dset['n_random_rollouts'][...]
+                dset_rsi_rollouts = dset['n_rsi_rollouts'][...]
                 n_start_rollouts = dset_start_rollouts if self._n_start_rollouts < 0 else min(self._n_start_rollouts, dset_start_rollouts)
                 n_rsi_rollouts = dset_rsi_rollouts if self._n_rsi_rollouts < 0 else min(self._n_rsi_rollouts, dset_rsi_rollouts)
                 for snippet in clip_snippets:
@@ -345,15 +314,16 @@ class ExpertDataset(Dataset):
         if self._keep_hdf5s_open:
             return self._getitem(self._dsets[dset_idx], idx)
 
-        with h5py.File(self._h5py_fnames[dset_idx], 'r') as dset:
+        with h5py.File(self._hdf5_fnames[dset_idx], 'r') as dset:
             return self._getitem(dset, idx)
 
     def _getitem(self, dset, idx):
         dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
         clip_idx = bisect.bisect_right(self._logical_indices[dset_idx], idx)-1
+        act_name = "mean_actions" if self._return_mean_act else "actions"
 
-        obs_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/observations"]
-        act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/actions"]
+        proprio_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/observations/proprioceptive"]
+        act_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/{act_name}"]
         val_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/values"]
         adv_dset = dset[f"{self._dset_groups[dset_idx][clip_idx]}/advantages"]
         snippet_len_weight = self._snippet_len_weights[dset_idx][clip_idx]
@@ -361,14 +331,14 @@ class ExpertDataset(Dataset):
         start_idx = int((idx - self._logical_indices[dset_idx][clip_idx]) / snippet_len_weight)
         if self.is_sequential:
             end_idx = min(start_idx + self._max_seq_steps, act_dset.shape[0]+1)
-            all_obs = obs_dset[start_idx:end_idx]
+            all_obs = proprio_dset[start_idx:end_idx]
             act = act_dset[start_idx:end_idx]
         else:
-            all_obs = obs_dset[start_idx]
+            all_obs = proprio_dset[start_idx]
             act = act_dset[start_idx]
 
         if self._normalize_obs:
-            all_obs = (all_obs - self.obs_mean) / self.obs_std
+            all_obs = (all_obs - self.proprio_mean) / self.proprio_std
         if self._normalize_act:
             act = (act - self.act_mean) / self.act_std
 
