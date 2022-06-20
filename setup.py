@@ -7,7 +7,7 @@ setup(
     author_email='nolan.wagener@gatech.edu',
     packages=['mocapact'],
     install_requires=[
-        'cloudpickle<=2.1.0',
+        'cloudpickle>=2.1.0',
         'dm_control<=1.0.2',
         'h5py',
         'imageio',
