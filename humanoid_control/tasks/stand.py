@@ -15,7 +15,6 @@ from dm_control.locomotion.tasks.reference_pose.tracking import DEFAULT_PHYSICS_
 from dm_control.locomotion.tasks.reference_pose import utils
 from dm_control.locomotion.walkers import cmu_humanoid
 from dm_control.locomotion.walkers import initializers
-from dm_control.mujoco.wrapper import mjbindings
 
 STANDING_HEIGHT = 1.8
 
@@ -24,9 +23,7 @@ class StandUpInitalizer(initializers.WalkerInitializer):
         ref_path = cmu_mocap_data.get_path_for_cmu('2020')
         self._get_up_keys = ['CMU_139_16', 'CMU_139_17', 'CMU_139_18',
                              'CMU_140_01', 'CMU_140_02', 'CMU_140_08', 'CMU_140_09']
-        #self._get_up_keys = ['CMU_139_16']
         self._stand_mocap_key = 'CMU_040_12'
-        self._stand_mocap_key = 'CMU_016_22' # TODO: remove
         self._loader = loader.HDF5TrajectoryLoader(ref_path)
 
         trajectory = self._loader.get_trajectory(self._stand_mocap_key)
@@ -35,11 +32,11 @@ class StandUpInitalizer(initializers.WalkerInitializer):
         self._stand_features = tree.map_structure(lambda x: x[0], clip_reference_features)
 
     def initialize_pose(self, physics, walker, random_state):
-        if random_state.rand() < 0: #0.5: # lying on ground
+        if random_state.rand() < 0.5: # lying on ground
             is_stand = False
             mocap_key = random_state.choice(self._get_up_keys)
-            start = random_state.choice(range(30))
             trajectory = self._loader.get_trajectory(mocap_key)
+            start = random_state.choice(range(trajectory.end_step))
             clip_reference_features = trajectory.as_dict()
             clip_reference_features = _strip_reference_prefix(clip_reference_features, 'walker/')
             timestep_features = tree.map_structure(lambda x: x[start], clip_reference_features)
@@ -50,7 +47,6 @@ class StandUpInitalizer(initializers.WalkerInitializer):
         mujoco.mj_kinematics(physics.model.ptr, physics.data.ptr)
         if is_stand:
             height_perturb = random_state.uniform(0.1, 0.25)
-            height_perturb = 0. # TODO: remove
             walker.shift_pose(physics, position=[0, 0, height_perturb])
 
 class StandUp(composer.Task):
@@ -94,7 +90,6 @@ class StandUpGymEnv(core.Env):
     def __init__(
         self,
         seed=0,
-        extra_obs_space=None,
         # for rendering
         width=640,
         height=480,
@@ -105,15 +100,8 @@ class StandUpGymEnv(core.Env):
         self._env = self._create_env()
         self._rng_state = self.np_random.get_state()
 
-        self._action_space = spaces.Box(
-            low=np.float32(-1.),
-            high=np.float32(1.),
-            shape=self._env.action_spec().shape,
-            dtype=np.float32
-        )
-
-        self._max_episode_steps = 270
-        self._elapsed_steps = None
+        spec = self._env.action_spec()
+        self._action_space = spaces.Box(low=spec.minimum.astype(np.float32), high=spec.maximum.astype(np.float32))
 
         obs_spaces = dict()
         for k, v in self._env.observation_spec().items():
@@ -121,10 +109,6 @@ class StandUpGymEnv(core.Env):
                 continue
             elif np.prod(v.shape) > 0:
                 obs_spaces[k] = spaces.Box(-np.infty, np.infty, shape=(np.prod(v.shape),), dtype=np.float32)
-        if extra_obs_space:
-            for k, space in extra_obs_space.items():
-                if k not in obs_spaces:
-                    obs_spaces[k] = space
         self._observation_space = spaces.Dict(obs_spaces)
 
         self.seed()
@@ -175,15 +159,13 @@ class StandUpGymEnv(core.Env):
         assert self.action_space.contains(action)
 
         time_step = self._env.step(action)
-        self._elapsed_steps += 1
         reward = time_step.reward or 0.
-        done = time_step.last() or self._elapsed_steps >= self._max_episode_steps
+        done = time_step.last()
         obs = self._get_obs(time_step)
         info = dict(discount=time_step.discount)
         return obs, reward, done, info
 
     def reset(self):
-        self._elapsed_steps = 0
         time_step = self._env.reset()
         return self._get_obs(time_step)
 
