@@ -1,7 +1,6 @@
 import os
 import os.path as osp
 import random
-import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta
 from absl import flags, app
