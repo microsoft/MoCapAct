@@ -20,9 +20,6 @@ from humanoid_control import utils
 from humanoid_control.sb3 import features_extractor
 from humanoid_control.sb3.torch_layers import create_mlp
 
-def count_parameters(parameters):
-    return sum(p.numel() for p in parameters)
-
 class BasePolicy(policies.BasePolicy, pl.LightningModule):
     """
     The base policy from which all other policy classes are derived.
