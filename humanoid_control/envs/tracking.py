@@ -23,6 +23,7 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         act_noise: float = 0.,
         enable_all_proprios: bool = False,
         enable_cameras: bool = False,
+        include_clip_id: bool = False,
 
         # for rendering
         width: int = 640,
@@ -32,6 +33,7 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         self._dataset = dataset or types.ClipCollection(ids=['CMU_016_22'])
         self._enable_all_proprios = enable_all_proprios
         self._enable_cameras = enable_cameras
+        self._include_clip_id = include_clip_id
         task_kwargs = task_kwargs or dict()
         task_kwargs['ref_path'] = cmu_mocap_data.get_path_for_cmu(version='2020')
         task_kwargs['dataset'] = self._dataset
@@ -88,7 +90,7 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
                     shape=tmp.shape,
                     dtype=np.uint8
                 )
-            elif v.dtype == np.int64: # clip ID
+            elif k == 'walker/clip_id' and self._include_clip_id:
                 obs_spaces[k] = spaces.Discrete(len(self._dataset.ids))
         return spaces.Dict(obs_spaces)
 
