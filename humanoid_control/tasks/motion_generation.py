@@ -10,7 +10,6 @@ from dm_control import composer
 from dm_control.locomotion.tasks.reference_pose import tracking
 from dm_control.locomotion.tasks.reference_pose import utils
 
-#HUMANOID_PROMPT_COLOR = (178/255, 172/255, 136/255, 1.)
 HUMANOID_PROMPT_COLOR = (170/255, 74/255, 68/255, 1.)
 HUMANOID_GENERATION_COLOR = (0.7, 0.5, 0.3, 1.)
 
@@ -67,6 +66,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
         self._max_steps = max_steps
         self._steps_before_color_change = steps_before_color_change
         self._time_step_override = None
+        self._start_step = None
 
     def _is_disallowed_contact(self, contact):
         set1, set2 = self._walker_nonfoot_geomids, self._ground_geomids
@@ -89,6 +89,7 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
 
     def initialize_episode_mjcf(self, random_state: np.random.RandomState):
         super().initialize_episode_mjcf(random_state)
+        self._start_step = self._time_step
         self._time_step_override = 0
 
     def get_reward(self, physics: 'mjcf.Physics') -> float:
@@ -138,6 +139,6 @@ class MotionGeneration(tracking.MultiClipMocapTracking):
 
         self._update_ghost(physics)
 
-        if self._time_step == self._steps_before_color_change:
+        if self._time_step - self._start_step == self._steps_before_color_change:
             colors = physics.named.model.mat_rgba['walker/self']
             colors[:] = HUMANOID_GENERATION_COLOR
