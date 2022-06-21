@@ -8,7 +8,6 @@ from scipy.special import logsumexp
 from gym import spaces
 from torch.utils.data import Dataset
 from stable_baselines3.common.running_mean_std import RunningMeanStd
-from mocapact import observables
 
 MULTIPLIER = 10
 
