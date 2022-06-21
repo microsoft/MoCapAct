@@ -44,7 +44,6 @@ flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
 flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
 flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
 flags.DEFINE_float("learning_rate", 1e-4, "Step size for PPO")
-flags.DEFINE_integer("flush_every", None, "How often (in minutes) to flush logs")
 
 # Low-level policy hyperparameters
 flags.DEFINE_string("low_level_policy_path", None, "Path to low-level policy, if desired")
@@ -124,7 +123,7 @@ def main(_):
         f.write(FLAGS.flags_into_string())
     if FLAGS.do_logging:
         format_strings = ['csv', 'tensorboard', 'stdout']
-        logger = configure(log_dir, format_strings, FLAGS.flush_every)
+        logger = configure(log_dir, format_strings)
 
     # If given a low-level policy, copy it to log directory to ease evaluation
     if FLAGS.low_level_policy_path:
@@ -153,7 +152,7 @@ def main(_):
         log_path=eval_path,
         eval_freq=eval_freq,
         callback_on_new_best=callback_on_new_best,
-        callback_after_eval=callbacks.SeedEnvCallback(FLAGS.eval.seed), 
+        callback_after_eval=callbacks.SeedEnvCallback(FLAGS.eval.seed),
         n_eval_episodes=FLAGS.eval.n_episodes,
         deterministic=True,
     )
