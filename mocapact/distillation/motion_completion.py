@@ -14,7 +14,7 @@ from dm_control.viewer import application
 from mocapact import observables
 from mocapact import utils
 from mocapact.envs import env_util
-from mocapact.envs import motion_generation
+from mocapact.envs import motion_completion
 from mocapact.sb3 import utils as sb3_utils
 from mocapact.distillation.model import NpmpPolicy
 
@@ -111,7 +111,6 @@ def main(_):
         prompt_policy = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
     elif FLAGS.distillation_path:
         prompt_policy = NpmpPolicy.load_from_checkpoint(FLAGS.distillation_path, map_location=FLAGS.device)
-        prompt_policy.observation_space['walker/clip_id'].n = int(1e6)
     else:
         raise ValueError()
 
@@ -124,7 +123,6 @@ def main(_):
         model_cls = utils.str_to_callable(f.readline())
     policy = model_cls.load_from_checkpoint(FLAGS.policy_path, map_location=FLAGS.device)
     policy.to(FLAGS.device)
-    policy.observation_space['walker/clip_id'].n = int(1e6)
 
     # set up environment
     task_kwargs = dict(
@@ -144,7 +142,7 @@ def main(_):
     if FLAGS.n_eval_episodes > 0:
         # VecEnv for evaluation
         vec_env = env_util.make_vec_env(
-            env_id=motion_generation.MotionGenerationGymEnv,
+            env_id=motion_completion.MotionCompletionGymEnv,
             n_envs=FLAGS.n_workers,
             seed=FLAGS.seed,
             env_kwargs=env_kwargs,
@@ -177,7 +175,7 @@ def main(_):
 
     if FLAGS.visualize:
         # env for visualization
-        env = motion_generation.MotionGenerationGymEnv(**env_kwargs)
+        env = motion_completion.MotionCompletionGymEnv(**env_kwargs)
 
         t, gpt_state, prompt_state = 0, None, None
         @torch.no_grad()
@@ -185,6 +183,7 @@ def main(_):
             nonlocal t, gpt_state, prompt_state
             if time_step.step_type == 0: # first time step
                 t, gpt_state, prompt_state = 0, None, None
+
             obs = env.get_observation(time_step)
             gpt_action, gpt_state = policy.predict(obs, gpt_state, deterministic=FLAGS.deterministic)
             if t < FLAGS.prompt_length:
