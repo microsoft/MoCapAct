@@ -17,7 +17,7 @@ from mocapact.distillation import model
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("model_root", None, "Directory where policy is stored")
-flags.DEFINE_float("max_embed", 3.5, "Maximum embed")
+flags.DEFINE_float("max_embed", 3., "Maximum embed")
 task_file = "mocapact/transfer/config.py"
 config_flags.DEFINE_config_file("task", f"{task_file}:go_to_target", "Task")
 
