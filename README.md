@@ -1,24 +1,25 @@
-# MoCapAct code
-
-This repo intends to track several experiments, tools and datasets for expert rollouts based on the CMU Mocap dataset and `dm_control` Humanoid Environment.
+# MoCapAct
 
 ## Getting Started
+We recommend that you use a virtual environment.
+For example, using conda:
 ```bash
-conda create -n humcontrol pip python=3.7
-conda activate humcontrol
+conda create -n mocapact pip
+conda activate mocapact
+```
+
+To install the package, you can run `pip install` on the GitHub repo:
+```bash
+pip install git+https://github.com/nolanwagener/mocapact.git
+```
+
+Alternatively, to have an editable version, clone the repo and install the local copy:
+```bash
+git clone https://github.com/nolanwagener/mocapact.git
+cd mocapact
 pip install -e .
 ```
 
-## MuJoCo dependencies
-Please follow instrunctions in [`dm_control`](https://github.com/deepmind/dm_control)
-
-- Useful env variables to have in .bashrc:
-
-```bash
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco210/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.mujoco/mujoco200/bin
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia/lib64
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/
-export LIBGL_ALWAYS_INDIRECT=0
-export DISPLAY=:0
-```
+**Note:** All included policies only work with MuJoCo 2.1.5 or earlier.
+MuJoCo 2.2.0 uses analytic derivatives in place of finite-difference derivatives to determine actuator forces, which effectively changes the transition function of the simulator.
+Accordingly, MoCapAct installs MuJoCo 2.1.5 and `dm_control` 1.0.2.
