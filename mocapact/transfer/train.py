@@ -183,9 +183,5 @@ def main(_):
     ]
     model.learn(FLAGS.total_timesteps, callback=callback)
 
-    print("Finished!")
-    Path(osp.join(log_dir, "FINISHED")).touch()
-    Path(osp.join(osp.dirname(log_dir), "SUCCEEDED")).touch()
-
 if __name__ == '__main__':
     app.run(main)
