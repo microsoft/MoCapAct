@@ -23,7 +23,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_root", None, "Path to the policy")
 flags.DEFINE_integer("min_steps", 10, "Minimum number of steps (used for RSI)")
 flags.DEFINE_float("act_noise", 0.1, "Action noise in humanoid")
-flags.DEFINE_string("mocap_dir", ".", "Directory where CMU mocap data is stored")
 
 # Visualization hyperparameters
 flags.DEFINE_bool("visualize", True, "Whether to visualize via GUI")
@@ -44,9 +43,6 @@ flags.mark_flag_as_required("policy_root")
 logging.set_verbosity(logging.WARNING)
 
 def main(_):
-    # Mocap directory
-    os.environ['CMU_MOCAP_DIR'] = FLAGS.mocap_dir
-
     # Make environment
     with open(osp.join(FLAGS.policy_root, osp.pardir, osp.pardir, 'clip_info.json')) as f:
         clip_info = json.load(f)
