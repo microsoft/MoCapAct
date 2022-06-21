@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Optional, Type, Union
 import gym
 
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv, VecNormalize, VecVideoRecorder
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecEnv
 
 
 def make_vec_env(
