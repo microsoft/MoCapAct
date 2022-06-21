@@ -43,7 +43,7 @@ def get_config(config_string):
         'npmp': ConfigDict({
             'constructor': prepend_model('NpmpPolicy'),
             'config': ConfigDict(dict(
-                embed_size=20,
+                embed_size=60,
                 ref_encoder_n_layers=2,
                 ref_encoder_layer_size=1024,
                 decoder_n_layers=3,
