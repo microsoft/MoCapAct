@@ -50,7 +50,6 @@ def main(_):
     with open(model_constructor_path, 'r') as f:
         model_cls = utils.str_to_callable(f.readline())
     policy = model_cls.load_from_checkpoint(FLAGS.policy_path, map_location=FLAGS.device)
-    policy.observation_space['walker/clip_id'].n = len(clips.ids)
 
     # set up environment
     task_kwargs = dict(
