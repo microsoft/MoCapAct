@@ -75,13 +75,12 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         obs_spaces = dict()
         for k, v in self._env.observation_spec().items():
             if v.dtype == np.float64 and np.prod(v.shape) > 0:
-                if np.prod(v.shape) > 0:
-                    obs_spaces[k] = spaces.Box(
-                        -np.infty,
-                        np.infty,
-                        shape=(np.prod(v.shape),),
-                        dtype=np.float32
-                    )
+                obs_spaces[k] = spaces.Box(
+                    -np.infty,
+                    np.infty,
+                    shape=(np.prod(v.shape),),
+                    dtype=np.float32
+                )
             elif v.dtype == np.uint8:
                 tmp = v.generate_value()
                 obs_spaces[k] = spaces.Box(
