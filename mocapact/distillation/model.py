@@ -12,7 +12,6 @@ from torch.distributions.normal import Normal
 from torch.distributions.independent import Independent
 from torch.distributions.kl import kl_divergence
 import pytorch_lightning as pl
-from collections import deque
 
 from stable_baselines3.common import torch_layers
 
