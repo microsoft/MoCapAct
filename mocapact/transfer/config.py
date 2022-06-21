@@ -1,6 +1,6 @@
 from ml_collections import ConfigDict
 from dm_control.locomotion.tasks import go_to_target
-from mocapact.tasks import speed_control
+from mocapact.tasks import velocity_control
 
 def get_config(task_string):
     tasks = {
@@ -10,8 +10,8 @@ def get_config(task_string):
                 moving_target=True
             ))
         }),
-        'speed_control': ConfigDict({
-            'constructor': speed_control.SpeedControl,
+        'velocity_control': ConfigDict({
+            'constructor': velocity_control.VelocityControl,
             'config': ConfigDict(dict(
                 max_speed=4.5,
                 reward_margin=0.75,

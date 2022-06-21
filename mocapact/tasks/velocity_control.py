@@ -4,9 +4,9 @@ from dm_control import composer
 from dm_control.composer.observation import observable as dm_observable
 from dm_control.locomotion.tasks.reference_pose import tracking
 
-class SpeedControl(composer.Task):
+class VelocityControl(composer.Task):
     """
-    A task that requires the walker to track a randomly changing speed.
+    A task that requires the walker to track a randomly changing velocity.
     """
 
     def __init__(
@@ -16,7 +16,7 @@ class SpeedControl(composer.Task):
         max_speed=4.5,
         reward_margin=0.75,
         direction_exponent=1.,
-        steps_before_changing_speed=166,
+        steps_before_changing_velocity=166,
         physics_timestep=tracking.DEFAULT_PHYSICS_TIMESTEP,
         control_timestep=0.03
     ):
@@ -26,7 +26,7 @@ class SpeedControl(composer.Task):
         self._max_speed = max_speed
         self._reward_margin = reward_margin
         self._direction_exponent = direction_exponent
-        self._steps_before_changing_speed = steps_before_changing_speed
+        self._steps_before_changing_velocity = steps_before_changing_velocity
         self._move_speed = 0.
         self._move_angle = 0.
         self._move_speed_counter = 0.
@@ -35,7 +35,7 @@ class SpeedControl(composer.Task):
         def task_state(physics):
             del physics
             sin, cos = np.sin(self._move_angle), np.cos(self._move_angle)
-            phase = self._move_speed_counter / self._steps_before_changing_speed
+            phase = self._move_speed_counter / self._steps_before_changing_velocity
             return np.array([self._move_speed, sin, cos, phase])
         self._task_observables['target_obs'] = dm_observable.Generic(task_state)
 
@@ -123,5 +123,5 @@ class SpeedControl(composer.Task):
                 break
 
         self._move_speed_counter += 1
-        if self._move_speed_counter >= self._steps_before_changing_speed:
+        if self._move_speed_counter >= self._steps_before_changing_velocity:
             self._sample_move_speed(random_state)
