@@ -19,6 +19,16 @@ def get_exponential_fn(start: float, decay: float, lr_min: float):
         return np.maximum(lr, lr_min)
     return func
 
+def get_piecewise_constant_fn(start: float, decay: float):
+    decay_squared = decay**2
+    def func(progress_remaining: float) -> float:
+        return (
+            start                    if progress_remaining >= 2/3
+            else start/decay         if progress_remaining >= 1/3
+            else start/decay_squared
+        )
+    return func
+
 def load_policy(
     model_path: Text,
     observable_keys: Union[Tuple[Text], Dict[Text, Text]],

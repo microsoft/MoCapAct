@@ -48,8 +48,7 @@ flags.DEFINE_float("max_grad_norm", 1., "Clipping value for gradient norm")
 flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
 lr_config = ml_collections.ConfigDict()
 lr_config.start_val = 1e-4  # Initial step size
-lr_config.decay_half_life = 0.2  # Half-life for decay rate of learning rate
-lr_config.min_val = 1e-6  # Minimum step size
+lr_config.decay = 1.73 # Decay rate for learning rate
 config_flags.DEFINE_config_dict("learning_rate", lr_config)
 
 # Network hyperparameters
@@ -209,10 +208,9 @@ def main(_):
     )
 
     # Set up model (policy + value)
-    decay = np.log(2) / FLAGS.learning_rate.decay_half_life
-    lr_schedule = sb3_utils.get_exponential_fn(FLAGS.learning_rate.start_val, decay, FLAGS.learning_rate.min_val)
+    lr_schedule = sb3_utils.get_piecewise_constant_fn(FLAGS.learning_rate.start_val, FLAGS.learning_rate.decay)
 
-    # # Load a prior policy, if available
+    # Load a prior policy, if available
     if FLAGS.warm_start_path:
         print("Loading prior model from:", FLAGS.warm_start_path)
         with zipfile.ZipFile(osp.join(FLAGS.warm_start_path, 'best_model.zip')) as archive:
