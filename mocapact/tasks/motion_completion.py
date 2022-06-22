@@ -11,7 +11,7 @@ from dm_control.locomotion.tasks.reference_pose import tracking
 from dm_control.locomotion.tasks.reference_pose import utils
 
 HUMANOID_PROMPT_COLOR = (170/255, 74/255, 68/255, 1.)
-HUMANOID_GENERATION_COLOR = (0.7, 0.5, 0.3, 1.)
+HUMANOID_COMPLETION_COLOR = (0.7, 0.5, 0.3, 1.)
 
 class MotionCompletion(tracking.MultiClipMocapTracking):
     """
@@ -139,6 +139,6 @@ class MotionCompletion(tracking.MultiClipMocapTracking):
 
         self._update_ghost(physics)
 
-        if self._time_step - self._start_step == self._steps_before_color_change:
+        if self._time_step == self._last_step-1 or self._time_step - self._start_step == self._steps_before_color_change:
             colors = physics.named.model.mat_rgba['walker/self']
-            colors[:] = HUMANOID_GENERATION_COLOR
+            colors[:] = HUMANOID_COMPLETION_COLOR
