@@ -46,7 +46,7 @@ def main(_):
     is_in_eval_dir = osp.exists(osp.join(osp.dirname(osp.dirname(osp.dirname(FLAGS.policy_path))), 'model_constructor.txt'))
     model_constructor_path = (osp.join(osp.dirname(osp.dirname(osp.dirname(FLAGS.policy_path))), 'model_constructor.txt')
                               if is_in_eval_dir
-                              else osp.join(osp.dirname(FLAGS.policy_path), 'model_constructor.txt'))
+                              else osp.join(osp.dirname(osp.dirname(FLAGS.policy_path)), 'model_constructor.txt'))
     with open(model_constructor_path, 'r') as f:
         model_cls = utils.str_to_callable(f.readline())
     policy = model_cls.load_from_checkpoint(FLAGS.policy_path, map_location=FLAGS.device)
