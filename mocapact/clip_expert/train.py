@@ -20,6 +20,7 @@ from mocapact import observables
 from mocapact import utils
 from mocapact.envs import env_util
 from mocapact.envs import tracking
+from mocapact.sb3 import callbacks as sb3_callbacks
 from mocapact.sb3 import features_extractor
 from mocapact.sb3 import utils as sb3_utils
 from mocapact.sb3 import wrappers
@@ -77,6 +78,7 @@ flags.DEFINE_integer("seed", 0, "RNG seed for training")
 flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1", "cuda:2", "cuda:3"], "Device to do training on")
 flags.DEFINE_bool("do_logging", True, "Whether to log")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
+flags.DEFINE_string("warm_start_path", None, "If desired, path to warm-start parameters")
 
 flags.mark_flag_as_required('clip_id')
 flags.mark_flag_as_required('log_root')
@@ -157,12 +159,12 @@ def main(_):
     # Evaluation environment where start point is selected at random
     rsi_eval_env_ctor = lambda: make_env(seed=FLAGS.eval.seed, start_step=FLAGS.start_step,
                                          end_step=end_step, min_steps=FLAGS.eval.min_steps,
-                                         act_noise=FLAGS.eval.random_eval_act_noise,
+                                         act_noise=FLAGS.eval.rsi_eval_act_noise,
                                          training=False, always_init_at_clip_start=False,
                                          termination_error_threshold=FLAGS.termination_error_threshold)
     eval_freq = int(FLAGS.eval.freq / FLAGS.n_workers)
     rsi_eval_model_path = osp.join(rsi_eval_path, 'model')
-    callback_on_new_best = callbacks.SaveVecNormalizeCallback(
+    callback_on_new_best = sb3_callbacks.SaveVecNormalizeCallback(
         save_freq=1,
         save_path=rsi_eval_model_path
     )
@@ -178,7 +180,7 @@ def main(_):
         eval_freq=eval_freq,
         callback_on_new_best=callback_on_new_best,
         callback_after_eval=early_stopping_callback,
-        n_eval_episodes=FLAGS.eval.n_random_episodes,
+        n_eval_episodes=FLAGS.eval.n_rsi_episodes,
         deterministic=True,
         record_video=FLAGS.record_video,
         name="eval_rsi"
@@ -191,7 +193,7 @@ def main(_):
                                            always_init_at_clip_start=True,
                                            termination_error_threshold=FLAGS.termination_error_threshold)
     start_eval_model_path = osp.join(start_eval_path, 'model')
-    callback_on_new_best = callbacks.SaveVecNormalizeCallback(
+    callback_on_new_best = sb3_callbacks.SaveVecNormalizeCallback(
         save_freq=1,
         save_path=start_eval_model_path
     )
@@ -268,7 +270,7 @@ def main(_):
         rsi_eval_callback,
         start_eval_callback,
         callbacks.NormalizedRolloutCallback(),
-        callbacks.LogOnRolloutEndCallback(log_dir)
+        sb3_callbacks.LogOnRolloutEndCallback(log_dir)
     ]
     model.learn(FLAGS.total_timesteps, callback=callback)
 
