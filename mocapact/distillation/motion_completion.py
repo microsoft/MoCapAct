@@ -105,16 +105,7 @@ def get_expert(expert_names, clip_id, start_step):
     return model
 
 def main(_):
-    dataset = utils.make_clip_collection([FLAGS.clip_snippet])
-    if FLAGS.expert_root:
-        expert_names = os.listdir(FLAGS.expert_root)
-        prompt_policy = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
-    elif FLAGS.distillation_path:
-        prompt_policy = NpmpPolicy.load_from_checkpoint(FLAGS.distillation_path, map_location=FLAGS.device)
-    else:
-        raise ValueError()
-
-    # set up model
+    # set up GPT
     is_in_eval_dir = osp.exists(osp.join(osp.dirname(osp.dirname(osp.dirname(FLAGS.policy_path))), 'model_constructor.txt'))
     model_constructor_path = (osp.join(osp.dirname(osp.dirname(osp.dirname(FLAGS.policy_path))), 'model_constructor.txt')
                               if is_in_eval_dir
@@ -123,6 +114,17 @@ def main(_):
         model_cls = utils.str_to_callable(f.readline())
     policy = model_cls.load_from_checkpoint(FLAGS.policy_path, map_location=FLAGS.device)
     policy.to(FLAGS.device)
+
+    # set up prompt policy
+    dataset = utils.make_clip_collection([FLAGS.clip_snippet])
+    if FLAGS.expert_root:
+        expert_names = os.listdir(FLAGS.expert_root)
+        prompt_policy = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
+        prompt_policy.policy.observation_space = policy.observation_space
+    elif FLAGS.distillation_path:
+        prompt_policy = NpmpPolicy.load_from_checkpoint(FLAGS.distillation_path, map_location=FLAGS.device)
+    else:
+        raise ValueError()
 
     # set up environment
     task_kwargs = dict(
