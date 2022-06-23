@@ -127,7 +127,7 @@ def main(_):
     dataset = utils.make_clip_collection([FLAGS.clip_snippet])
     if FLAGS.expert_root:
         expert_names = os.listdir(FLAGS.expert_root)
-        prompt_policy, dataset = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
+        prompt_policy, dataset = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0], dataset.end_steps[0])
         prompt_policy.policy.observation_space = policy.observation_space
     elif FLAGS.distillation_path:
         prompt_policy = NpmpPolicy.load_from_checkpoint(FLAGS.distillation_path, map_location=FLAGS.device)
