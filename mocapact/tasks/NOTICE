@@ -2,7 +2,7 @@ The collision-checking code for `motion_completion.py` and `velocity_control.py`
 are based on that from `dm_control/locomotion/tasks/go_to_target.py`. Much of
 the code in `motion_completion.py` is also taken from
 `dm_control/locomotion/tasks/reference_pose/tracking.py`. `dm_control` is
-licensed under the Apache License, copyright 2020 The dm_control Authors.
+licensed under the Apache License, Copyright 2020 The dm_control Authors.
 
 
                                  Apache License
