@@ -2,6 +2,7 @@ import os
 import os.path as osp
 import numpy as np
 import torch
+import json
 from absl import app, flags, logging
 from pathlib import Path
 from stable_baselines3.common import base_class
@@ -10,6 +11,7 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnvStepReturn
 from stable_baselines3.common import evaluation
 
 from dm_control.viewer import application
+from dm_control.locomotion.tasks.reference_pose import types
 
 from humanoid_control import observables
 from humanoid_control import utils
@@ -90,25 +92,31 @@ class PromptWrapper(VecEnvWrapper):
         return obs, rew, done, info
 
 
-def get_expert(expert_names, clip_id, start_step):
+def get_expert(expert_names, clip_id, start_step, end_step):
     expert_name = None
     for name in expert_names:
         id, start, end = name.split('-')
-        if id == clip_id and int(start) <= start_step < int(end):
+        if id == clip_id and int(start) <= start_step and end_step <= int(end) :
             expert_name = name
             break
     assert expert_name is not None
 
+    # Overwrite the start and end steps to ensure proper time step alignment with expert.
+    with open(osp.join(FLAGS.expert_root, expert_name, 'clip_info.json')) as f:
+        clip_info = json.load(f)
+    clip_id, start_step, end_step = [clip_info[s] for s in ['clip_id', 'start_step', 'end_step']]
+    dataset = types.ClipCollection(ids=[clip_id], start_steps=[start_step], end_steps=[end_step])
+
     model_path = osp.join(FLAGS.expert_root, expert_name, 'eval_rsi/model')
     model = sb3_utils.load_policy(model_path, observables.TIME_INDEX_OBSERVABLES, device=FLAGS.device)
 
-    return model
+    return model, dataset
 
 def main(_):
     dataset = utils.make_clip_collection([FLAGS.clip_snippet])
     if FLAGS.expert_root:
         expert_names = os.listdir(FLAGS.expert_root)
-        prompt_policy = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0])
+        prompt_policy, dataset = get_expert(expert_names, dataset.ids[0], dataset.start_steps[0], dataset.end_steps[0])
     elif FLAGS.distillation_path:
         prompt_policy = NpmpPolicy.load_from_checkpoint(FLAGS.distillation_path, map_location=FLAGS.device)
         prompt_policy.observation_space['walker/clip_id'].n = int(1e6)
@@ -196,7 +204,7 @@ def main(_):
             t += 1
             return action
 
-        viewer_app = application.Application(title='Explorer', width=1280, height=720)
+        viewer_app = application.Application(title='Explorer')
         viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':
