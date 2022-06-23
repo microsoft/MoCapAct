@@ -197,7 +197,7 @@ def main(_):
             t += 1
             return action
 
-        viewer_app = application.Application(title='Explorer', width=1280, height=720)
+        viewer_app = application.Application(title='Motion Completion', width=1280, height=720)
         viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':

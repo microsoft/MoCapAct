@@ -64,7 +64,7 @@ def main(_):
         FLAGS.act_noise
     )
 
-    model = utils.load_policy(FLAGS.policy_root, observables.TIME_INDEX_OBSERVABLES)
+    model = utils.load_policy(FLAGS.policy_root, observables.TIME_INDEX_OBSERVABLES, device=FLAGS.device)
 
     if FLAGS.n_eval_episodes > 0:
         # VecEnv for evaluation
@@ -115,7 +115,7 @@ def main(_):
             action, _ = model.predict(env.get_observation(time_step), deterministic=True)
             return action
 
-        viewer_app = application.Application(title='Explorer', width=1280, height=720)
+        viewer_app = application.Application(title='Clip Expert', width=1280, height=720)
         viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':
