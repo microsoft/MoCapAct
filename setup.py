@@ -5,6 +5,7 @@ setup(
     version='0.1',
     author='Nolan Wagener',
     author_email='nolan.wagener@gatech.edu',
+    license='MIT',
     packages=['mocapact'],
     install_requires=[
         'cloudpickle>=2.1.0',
