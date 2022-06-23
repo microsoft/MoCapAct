@@ -120,7 +120,7 @@ def main(_):
             action, state = policy.predict(env.get_observation(time_step), state, deterministic=FLAGS.deterministic)
             return action
 
-        viewer_app = application.Application(title='Explorer', width=1280, height=720)
+        viewer_app = application.Application(title='Distillation', width=1280, height=720)
         viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':
