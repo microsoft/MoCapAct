@@ -16,7 +16,7 @@ def get_config(task_string):
                 max_speed=4.5,
                 reward_margin=0.75,
                 direction_exponent=1.,
-                steps_before_changing_speed=166
+                steps_before_changing_velocity=166
             ))
         })
     }
