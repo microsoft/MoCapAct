@@ -98,7 +98,7 @@ def main(_):
         return action
 
     if FLAGS.visualize:
-        viewer_app = application.Application(title='Humanoid Task', width=1280, height=720)
+        viewer_app = application.Application(title='Humanoid Task', width=1024, height=768)
         viewer_app.launch(environment_loader=env.dm_env, policy=policy_fn)
 
 if __name__ == '__main__':
