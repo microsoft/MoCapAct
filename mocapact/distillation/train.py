@@ -25,6 +25,7 @@ flags.DEFINE_string("dataset_metrics_path", None, "Path to load dataset metrics"
 flags.DEFINE_list("train_dataset_paths", None, "Path(s) to training dataset(s)")
 flags.DEFINE_list("val_dataset_paths", None, "Path(s) to validation dataset(s), if desired")
 flags.DEFINE_list("extra_clips", None, "List of clip snippets to additionaly do evaluations on, if desired")
+flags.DEFINE_bool("include_timestamp", True, "Whether to include timestamp in log directory")
 flags.DEFINE_integer("validation_freq", None, "How often (in iterations) to do validation loop")
 flags.DEFINE_integer("train_start_rollouts", -1, "Number of start rollouts to consider in training set")
 flags.DEFINE_integer("train_rsi_rollouts", -1, "Number of RSI rollouts to consider in training set")
@@ -77,7 +78,9 @@ flags.mark_flag_as_required("train_dataset_paths")
 flags.mark_flag_as_required("dataset_metrics_path")
 
 def main(_):
-    output_dir = osp.join(FLAGS.output_root, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    output_dir = FLAGS.output_root
+    if FLAGS.include_timestamp:
+        output_dir = osp.join(output_dir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
 
     # Make supervision dataset
     if hasattr(FLAGS.model.config, 'seq_steps'):
