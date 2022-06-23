@@ -1,5 +1,5 @@
 Large portion of the `callbacks.MocapTrackingEvalCallback` code is based on
-Stable-Baseline 3's `EvalCallback` code. Stable-Baselines 3 is licensed under
+Stable-Baseline3's `EvalCallback` code. Stable-Baselines3 is licensed under
 the MIT License:
 
 Copyright (c) 2019 Antonin Raffin
