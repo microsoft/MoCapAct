@@ -10,8 +10,9 @@
             "request": "launch",
             "cwd": "${workspaceFolder}/aml_experiments",
             // "program": "launch_rollout_experts.py",
-            "program": "launch_offline_rl.py",
+            // "program": "launch_offline_rl.py",
             // "program": "launch_distillation.py",
+            "program": "launch_compress_files.config.py",
             "justMyCode": false,
             "console": "integratedTerminal"
         },
@@ -90,6 +91,20 @@
             "args":
             [
                 "-f", "CMU_001_01"
+            ],
+            "justMyCode": false,
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "compress-files",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "program": "./scripts/compress_files.py",
+            "args":
+            [
+                "--input_path", "${workspaceFolder}/../data/offline_rl",
+                "--output_path", "${workspaceFolder}/../data"
             ],
             "justMyCode": false,
             "console": "integratedTerminal",
