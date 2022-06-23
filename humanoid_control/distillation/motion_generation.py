@@ -100,7 +100,7 @@ def get_expert(expert_names, clip_id, start_step):
     assert expert_name is not None
 
     model_path = osp.join(FLAGS.expert_root, expert_name, 'eval_rsi/model')
-    model = sb3_utils.load_policy(model_path, observables.TIME_INDEX_OBSERVABLES)
+    model = sb3_utils.load_policy(model_path, observables.TIME_INDEX_OBSERVABLES, device=FLAGS.device)
 
     return model
 
