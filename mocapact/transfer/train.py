@@ -69,7 +69,7 @@ flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1", 
 flags.DEFINE_bool("check_other_runs", False, "Whether to check if preceding runs were finished")
 flags.DEFINE_bool("do_logging", True, "Whether to log")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
-flags.DEFINE_string("warm_start_root", None, "")
+flags.DEFINE_bool("include_timestamp", True, "Whether to include timestamp in log directory")
 
 flags.mark_flag_as_required('log_root')
 
@@ -109,8 +109,10 @@ def make_env(seed=0, training=True):
 
 def main(_):
     # Log directory
-    now = datetime.now()
-    log_dir = osp.join(FLAGS.log_root, str(FLAGS.seed), now.strftime("%Y-%m-%d_%H-%M-%S"))
+    log_dir = osp.join(FLAGS.log_root, str(FLAGS.seed))
+    if FLAGS.include_timestamp:
+        now = datetime.now()
+        log_dir = osp.join(log_dir, now.strftime("%Y-%m-%d_%H-%M-%S"))
 
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 

@@ -77,6 +77,7 @@ flags.DEFINE_integer("seed", 0, "RNG seed for training")
 flags.DEFINE_enum("device", "auto", ["auto", "cpu", "cuda", "cuda:0", "cuda:1", "cuda:2", "cuda:3"], "Device to do training on")
 flags.DEFINE_bool("do_logging", True, "Whether to log")
 flags.DEFINE_bool("record_video", False, "Whether to record video for evaluation")
+flags.DEFINE_bool("include_timestamp", True, "Whether to include timestamp in log directory")
 flags.DEFINE_string("warm_start_path", None, "If desired, path to warm-start parameters")
 
 flags.mark_flag_as_required('clip_id')
@@ -114,9 +115,10 @@ def main(_):
     end_step = FLAGS.start_step + snippet_length
 
     # Log directory
-    now = datetime.now()
-    log_dir = osp.join(FLAGS.log_root, f"{FLAGS.clip_id}-{FLAGS.start_step}-{end_step}",
-                       str(FLAGS.seed), now.strftime("%Y-%m-%d_%H-%M-%S"))
+    log_dir = osp.join(FLAGS.log_root, f"{FLAGS.clip_id}-{FLAGS.start_step}-{end_step}", str(FLAGS.seed))
+    if FLAGS.include_timestamp:
+        now = datetime.now()
+        log_dir = osp.join(log_dir, now.strftime("%Y-%m-%d_%H-%M-%S"))
 
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     clip_info = dict(
