@@ -1,8 +1,7 @@
-The code for `callbacks.SaveVecNormalizeCallback` is taken from
+The code for `callbacks.SaveVecNormalizeCallback` and `torch_layers.py` is taken from
 Stable-Baseline3-Contrib. The following are based on their counterparts
 in Stable-Baselines3 (SB3):
   - `evalution.evaluate_locomotion_policy` is based on SB3's `common.evaluation.evaluate_policy`
-  - `torch_layers.create_mlp` is based on SB3's `common.torch_layers.create_mlp`
   - `wrappers.MocapTrackingVecMonitor` is based on SB3's
     `common.vec_env.vec_monitor.VecMonitor`
 Both projects are licensed under the MIT License.
