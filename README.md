@@ -5,6 +5,7 @@ This is the codebase for the MoCapAct project, which contains all code to train 
 For more information on the project and to access the dataset, please visit the [project website](https://mhauskn.github.io/mocapact.github.io/).
 
 ## Setup
+MoCapAct requires Python 3.7+.
 We recommend that you use a virtual environment.
 For example, using conda:
 ```bash
