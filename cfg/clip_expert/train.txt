@@ -1,0 +1,17 @@
+--total_timesteps 150000000 \
+--min_steps 10 \
+--n_steps 8192 \
+--batch_size 512 \
+--n_epochs 10 \
+--clip_range 0.25 \
+--gae_lambda 0.95 \
+--noinclude_timestamp \
+--learning_rate.start_val 1e-5 \
+--learning_rate.decay 1.73 \
+--eval.freq 1000000 \
+--eval.min_steps 30 \
+--eval.n_rsi_episodes 1000 \
+--eval.n_start_episodes 100 \
+--eval.start_eval_act_noise 0.01 \
+--eval.early_stop.ep_length_threshold 0.98 \
+--eval.early_stop.min_reward_delta 0.01

@@ -1,0 +1,9 @@
+--learning_rate 5e-5 \
+--target_kl 0.3 \
+--n_steps 16384 \
+--n_epochs 10 \
+--batch_size 1024 \
+--total_timesteps 100000000 \
+--eval.freq 500000 \
+--eval.n_episodes 500 \
+--noinclude_timestamp

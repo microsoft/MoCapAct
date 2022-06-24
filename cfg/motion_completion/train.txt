@@ -1,0 +1,17 @@
+--n_workers 8 \
+--learning_rate 3e-6 \
+--max_grad_norm 1. \
+--normalize_obs \
+--batch_size 256 \
+--save_every_n_minutes 60 \
+--n_steps 3000000 \
+--n_hours 200 \
+--validation_freq 50000 \
+--val_start_rollouts 20 \
+--val_rsi_rollouts 20 \
+--clip_len_upsampling \
+--noinclude_timestamp \
+--model mocapact/distillation/config.py:gpt \
+--model.config.block_size 32 \
+--model.config.n_head 8 \
+--model.config.n_layer 8
