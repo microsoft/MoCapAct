@@ -1,0 +1,8 @@
+--min_steps 30 \
+--act_noise 0.1 \
+--ref_steps 1,2,3,4,5 \
+--n_start_rollouts 100 \
+--n_rsi_rollouts 100 \
+--separate_clips \
+--log_all_proprios \
+--nolog_cameras # set to True to log images from the cameras

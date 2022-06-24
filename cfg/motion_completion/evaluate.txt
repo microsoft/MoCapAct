@@ -1,0 +1,8 @@
+--max_steps 500 \
+--noalways_init_at_clip_start \
+--nodeterministic \
+--prompt_length 32 \
+--min_steps 32 \
+--eval_save_path motion_completion_evaluations.npz \
+--visualize \
+--ghost_offset 1.

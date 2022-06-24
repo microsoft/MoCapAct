@@ -1,0 +1,27 @@
+--n_workers 8 \
+--learning_rate 0.0005 \
+--n_steps 100000 \
+--max_grad_norm 1. \
+--batch_size 256 \
+--clip_len_upsampling \
+--normalize_obs \
+--temperature 4. \
+--noadvantage_weights \
+--save_every_n_minutes 60 \
+--eval_mode train_start \
+--eval_mode train_rsi \
+--eval_mode val_start \
+--eval_mode val_rsi \
+--eval_mode clips_start \
+--eval_mode clips_rsi \
+--validation_freq 10000 \
+--val_start_rollouts 20 \
+--val_rsi_rollouts 20 \
+--noinclude_timestamp \
+--model mocapact/distillation/config.py:npmp \
+--model.config.activation_fn torch.nn.ELU \
+--model.config.embedding_kl_weight 0.1 \
+--model.config.embedding_correlation 0. \
+--nomodel.config.squash_output \
+--eval.freq 10000 \
+--eval.n_episodes 1000

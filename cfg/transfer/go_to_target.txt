@@ -1,0 +1,2 @@
+--task mocapact/transfer/config.py:go_to_target \
+--episode_steps 833
