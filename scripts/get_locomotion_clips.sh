@@ -13,4 +13,12 @@ export train=""
 export clips=${clips:1}
 export train=${train:1}
 
+export snippets=""
+{
+  while IFS=, read -r snippet; do
+    export snippets="$snippets,$snippet"
+  done
+} < clip_splits/locomotion_snippets.txt
+export snippets=${snippets:1}
+
 export metrics=$dataset_path/dataset_metrics.npz
