@@ -15,7 +15,7 @@ setup(
         'imageio-ffmpeg',
         'ml_collections',
         'mujoco<=2.1.5',
-        'pytorch-lightning<=1.6.4',
+        'pytorch-lightning<1.7',
         'stable-baselines3'
     ]
 )
