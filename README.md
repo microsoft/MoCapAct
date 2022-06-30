@@ -82,7 +82,7 @@ dataset = types.ClipCollection(ids=['CMU_016_22'])
 env = tracking.MocapTrackingGymEnv(dataset)
 obs, done = env.reset(), False
 while not done:
-    action = expert.predict(obs, deterministic=True)
+    action, _ = expert.predict(obs, deterministic=True)
     obs, rew, done, _ = env.step(action)
     print(rew)
 ```
@@ -168,7 +168,7 @@ env = tracking.MocapTrackingGymEnv(dataset, ref_steps)
 obs, done = env.reset(), False
 embed = policy.initial_state(deterministic=False)
 while not done:
-    action = expert.predict(obs, state=embed, deterministic=False)
+    action, embed = expert.predict(obs, state=embed, deterministic=False)
     obs, rew, done, _ = env.step(action)
     print(rew)
 ```
