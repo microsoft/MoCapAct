@@ -1,0 +1,2 @@
+--low_level_policy_path [POLICY_PATH] `# e.g., multi_clip/all/eval/train_rsi/best_model.ckpt` \
+--std_init 2.5

@@ -1,0 +1,4 @@
+--task mocapact/transfer/config.py:velocity_control \
+--episode_steps 2000 \
+--task.config.direction_exponent 7. \
+--task.config.steps_before_changing_velocity 333
