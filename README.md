@@ -225,4 +225,4 @@ Alternatively, you can pass a path to a multi-clip policy through `--distillatio
 
 ## Licenses
 The code is licensed under the [MIT License](https://opensource.org/licenses/MIT).
-The dataset is licensed under the [Community Data License Agreement - Permissive, Version 2.0 License (CDLA v2)](https://cdla.dev/permissive-2-0/).
+The dataset is licensed under the [CDLA Permissive v2 License](https://cdla.dev/permissive-2-0/).
