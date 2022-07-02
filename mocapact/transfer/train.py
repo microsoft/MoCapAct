@@ -41,6 +41,7 @@ flags.DEFINE_float("clip_range", 0.2, "Clipping parameter for PPO")
 flags.DEFINE_float("target_kl", 0.15, "Limits KL divergence in updating policy")
 flags.DEFINE_float("max_grad_norm", 1., "Clipping value for gradient norm")
 flags.DEFINE_float("gae_lambda", 0.95, "GAE lambda parameter")
+flags.DEFINE_float("ent_coef", 0., "Entropy coefficient for PPO")
 flags.DEFINE_bool("normalize_observation", True, "Whether to normalize the observations")
 flags.DEFINE_bool("normalize_reward", True, "Whether to normalize the rewards")
 flags.DEFINE_float("learning_rate", 1e-4, "Step size for PPO")
@@ -168,7 +169,7 @@ def main(_):
         features_extractor_kwargs=dict(observable_keys=list(env.observation_space.keys()))
     )
     model = PPO("MultiInputPolicy", env, n_steps=int(FLAGS.n_steps / FLAGS.n_workers),
-                gamma=FLAGS.gamma, clip_range=FLAGS.clip_range,
+                gamma=FLAGS.gamma, clip_range=FLAGS.clip_range, ent_coef=FLAGS.ent_coef,
                 batch_size=FLAGS.batch_size, n_epochs=FLAGS.n_epochs,
                 gae_lambda=FLAGS.gae_lambda, max_grad_norm=FLAGS.max_grad_norm,
                 learning_rate=FLAGS.learning_rate, target_kl=FLAGS.target_kl,
