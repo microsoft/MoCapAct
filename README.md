@@ -1,8 +1,22 @@
 # MoCapAct
+
+<p align="center">
+  <img src="https://mhauskn.github.io/mocapact.github.io/assets/MoCapAct.gif" alt="overview" width="50%">
+</p>
+
 [![Code License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &nbsp;&nbsp;&nbsp;&nbsp; [<img src="https://cdla.dev/wp-content/uploads/sites/52/2017/10/cdla_logo.png" alt="Dataset License" width="150"/>](https://cdla.dev/permissive-2-0/)
 
-This is the codebase for the MoCapAct project, which contains all code to train the clip snippet experts, collect expert rollouts into a dataset, perform policy distillation, and perform RL on downstream tasks.
-For more information on the project and to access the dataset, please visit the [project website](https://mhauskn.github.io/mocapact.github.io/).
+
+This is the codebase for the MoCapAct project, which uses motion capture (MoCap) clips to learn low-level motor skills for the "CMU Humanoid" from the <tt>dm_control</tt> package.
+This repo contains all code to:
+- train the clip snippet experts,
+- collect expert rollouts into a dataset,
+- download our experts and rollouts from the command line,
+- perform policy distillation,
+- perform reinforcement learning on downstream tasks, and
+- perform motion completion.
+
+For more information on the project and to download the entire dataset, please visit the [project website](https://microsoft.github.io/MoCapAct/).
 
 ## Setup
 MoCapAct requires Python 3.7+.
@@ -13,12 +27,7 @@ conda create -n MoCapAct pip python==3.8
 conda activate MoCapAct
 ```
 
-To install the package, you can run `pip install` on the GitHub repo:
-```bash
-pip install git+https://github.com/microsoft/MoCapAct@main#egg=MoCapAct
-```
-
-Alternatively, to have an editable version, clone the repo and install the local copy:
+To install the package, we recommend cloning the repo and installing the local copy:
 ```bash
 git clone https://github.com/microsoft/MoCapAct.git
 cd MoCapAct
