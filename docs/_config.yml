@@ -3,7 +3,7 @@ description: A Multi-Task Dataset for Simulated Humanoid Control
 authors: Nolan Wagener, Andrey Kolobov, Felipe Vieira Frujeri, Ricky Loynd, Ching-An Cheng, Matthew Hausknecht
 buttons:
   Paper (OpenReview): 'https://openreview.net/forum?id=sWOdnSkB0qu'
-  Dataset (Coming Soon!): 'https://msropendata.com/'
+  Dataset: 'https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71'
   Code: 'https://github.com/microsoft/MoCapAct'
   #Blog: TODO
   #Paper (arXiv): TODO

@@ -21,7 +21,7 @@ We demonstrate the utility of MoCapAct by using it to train a <em>single</em> hi
 Finally, we use MoCapAct to train an autoregressive GPT model and show that it can perform natural motion completion given a motion prompt.
 
 ## MoCapAct Dataset
-The MoCapAct dataset consists of:
+The [MoCapAct dataset](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71) consists of:
 - expert policies that are trained to track individual clip snippets and
 - HDF5 files of noisy rollouts collected from each expert.
 
