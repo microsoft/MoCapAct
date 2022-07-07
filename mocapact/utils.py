@@ -63,7 +63,7 @@ def make_clip_collection(snippets: List[Text]):
     return types.ClipCollection(ids=ids, start_steps=start_steps, end_steps=end_steps)
 
 
-class AzureBlobConnector():
+class AzureBlobConnector:
     """
     Class to connect to Azure Blob Storage and download/upload files,
     handling the authentication, retry policy and other complexities
