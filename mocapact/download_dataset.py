@@ -1,5 +1,6 @@
 import argparse
 import os
+import os.path as osp
 from mocapact.utils import AzureBlobConnector
 from dm_control.locomotion.tasks.reference_pose import cmu_subsets
 
@@ -11,16 +12,16 @@ SUBSET_NAMES = '<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>'
 
 def download_dataset_from_url(dataset_url, blob_prefix, local_dest_path='./data', clips=None):
     print(f'Downloading {blob_prefix} dataset from:', dataset_url, 'to', local_dest_path)
-    os.makedirs(os.path.dirname(local_dest_path), exist_ok=True)
+    os.makedirs(osp.dirname(local_dest_path), exist_ok=True)
     blob_connector = AzureBlobConnector(dataset_url)
 
     if blob_prefix == 'experts':
         for clip in clips:
-            expert_blobs = blob_connector.list_blobs(prefix_filter=os.path.join(blob_prefix, clip))
+            expert_blobs = blob_connector.list_blobs(prefix_filter=osp.join(blob_prefix, clip))
 
             for blob in expert_blobs:
-                file_path = os.path.join(local_dest_path, blob['name'])
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                file_path = osp.join(local_dest_path, blob['name'])
+                os.makedirs(osp.dirname(file_path), exist_ok=True)
                 blob_connector.download_and_save_blob(blob['name'], file_path, max_concurrency=8)
 
         return local_dest_path
@@ -30,13 +31,13 @@ def download_dataset_from_url(dataset_url, blob_prefix, local_dest_path='./data'
             clips[i] = clip + '.hdf5'
 
     for clip in clips:
-        if not blob_connector.blob_exists(os.path.join(blob_prefix, clip)):
+        if not blob_connector.blob_exists(osp.join(blob_prefix, clip)):
             raise Exception(f"Clip {clip} does not exist in the dataset, please check the available snippets at {CMU_SUBSETS}.")
 
     for clip in clips:
-        file_path = os.path.join(local_dest_path, blob_prefix, clip)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        blob_connector.download_and_save_blob(os.path.join(blob_prefix, clip), file_path, max_concurrency=8)
+        file_path = osp.join(local_dest_path, blob_prefix, clip)
+        os.makedirs(osp.dirname(file_path), exist_ok=True)
+        blob_connector.download_and_save_blob(osp.join(blob_prefix, clip), file_path, max_concurrency=8)
 
     return local_dest_path
 
