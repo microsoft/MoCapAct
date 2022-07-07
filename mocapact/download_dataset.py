@@ -39,6 +39,11 @@ def download_dataset_from_url(dataset_url, blob_prefix, local_dest_path='./data'
         os.makedirs(osp.dirname(file_path), exist_ok=True)
         blob_connector.download_and_save_blob(osp.join(blob_prefix, clip), file_path, max_concurrency=8)
 
+    # dataset metrics
+    metrics_path = osp.join(local_dest_path, blob_prefix, 'dataset_metrics.npz')
+    if not osp.exists(metrics_path):
+        blob_connector.download_and_save_blob(osp.join(blob_prefix, 'dataset_metrics.npz'), metrics_path, max_concurrency=8)
+
     return local_dest_path
 
 def list_files_in_url(dataset_url):
