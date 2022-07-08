@@ -30,7 +30,7 @@ The HDF5 files can be used to train a multi-clip policy or GPT policy.
 Please refer to Appendix B of our paper for the structure of the experts and HDF5 files.
 
 ## Download Instructions
-We will soon provide links to download the three components of the dataset in the form of gzip files.
+The zipped version of the MoCapAct dataset is available at the [dataset site](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
 We also provide a Python script to download a user-provided subset of the dataset.
 The scripts take the following flags: 
 - `-t`: a type from `<experts | small_dataset | larget_dataset>`,
