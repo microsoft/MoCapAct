@@ -1,7 +1,7 @@
 # MoCapAct
 
 <p align="center">
-  <img src="https://mhauskn.github.io/mocapact.github.io/assets/MoCapAct.gif" alt="overview" width="50%">
+  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/MoCapAct.gif" alt="montage" width="70%">
 </p>
 
 [![Code License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &nbsp;&nbsp;&nbsp;&nbsp; [<img src="https://cdla.dev/wp-content/uploads/sites/52/2017/10/cdla_logo.png" alt="Dataset License" width="150"/>](https://cdla.dev/permissive-2-0/)
