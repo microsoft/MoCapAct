@@ -68,8 +68,6 @@ print("Expert actions from first rollout episode:")
 print(dset["CMU_002_01-0-92/0/actions"][...])
 ```
 
-**<span style="color:red">Note:</span>** All experts and rollouts are only compatible with MuJoCo 2.1.5 or earlier due to MuJoCo 2.2.0 changing how actuator forces are calculated.
-
 ## Clip Snippet Experts
 We train an expert policy for each of the 2589 snippets within the MoCap dataset.
 We find that the experts faithfully reproduce the overwhelming majorty of clips.
