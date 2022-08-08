@@ -34,11 +34,6 @@ cd MoCapAct
 pip install -e .
 ```
 
-**<span style="color:red">Note:</span>** All included policies (experts, multi-clip, etc.) will only work with MuJoCo 2.1.5 or earlier.
-MuJoCo 2.2.0 uses analytic derivatives in place of finite-difference derivatives to determine actuator forces, which effectively changes the transition function of the simulator.
-**Accordingly, MoCapAct installs MuJoCo 2.1.5 and <tt>dm_control</tt> 1.0.2.**
-The rollout datasets were also generated under MuJoCo 2.1.5.
-
 ## Downloading the Dataset
 We provide a Python script to download portions of the dataset.
 The script takes the following flags:
