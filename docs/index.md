@@ -9,16 +9,15 @@ title: 'MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control' layout: d
 </p>
 
 ## Abstract
-
-Control of simulated humanoid characters is a challenging benchmark for sequential decision-making methods, as it assesses a policy's ability to drive an inherently unstable, discontinuous, and high-dimensional physical system.
-One widely studied approach is to utilize motion capture (MoCap) data to teach the humanoid agent low-level skills (e.g., standing, walking, and running) that can be used to generate high-level behaviors.
-However, even with MoCap data, controlling simulated humanoids remains very hard, as MoCap data offers only kinematic information.
-Finding physical control inputs to realize the demonstrated motions requires computationally intensive methods like reinforcement learning.
+Simulated humanoids are an appealing research domain due to their physical capabilities.
+Nonetheless, they are also a challenging control system, as a policy must drive an unstable, discontinuous, and high-dimensional physical system.
+One widely studied approach is to utilize motion capture (MoCap) data to teach the humanoid agent low-level skills (e.g., standing, walking, and running) that can be then be re-used to synthesize high-level behaviors.
+However, even with MoCap data, controlling simulated humanoids remains very hard, as MoCap data offers only kinematic information. Finding physical control inputs to realize the demonstrated motions requires computationally intensive methods like reinforcement learning.
 Thus, despite the publicly available MoCap data, its utility has been limited to institutions with large-scale compute.
 In this work, we dramatically lower the barrier for productive research on this topic by training and releasing high-quality agents that can track over three hours of MoCap data for a simulated humanoid in the <tt>dm_control</tt> physics-based environment.
-We release <b>MoCapAct</b> (Motion Capture with Actions), a dataset of these expert agents and their rollouts containing proprioceptive observations and actions.
-We demonstrate the utility of MoCapAct by using it to train a <em>single</em> hierarchical policy capable of tracking the <em>entire</em> MoCap dataset within <tt>dm_control</tt> and show the learned low-level component can be re-used to efficiently learn high-level other tasks.
-Finally, we use MoCapAct to train an autoregressive GPT model and show that it can perform natural motion completion given a motion prompt.
+We release <b>MoCapAct</b> (Motion Capture with Actions), a dataset of these expert agents and their rollouts, which contain proprioceptive observations and actions.
+We demonstrate the utility of MoCapAct by using it to train a <em>single</em> hierarchical policy capable of tracking the <em>entire</em> MoCap dataset within <tt>dm_control</tt> and show the learned low-level component can be re-used to efficiently learn downstream high-level tasks.
+Finally, we use MoCapAct to train an autoregressive GPT model and show that it can control a simulated humanoid to perform natural motion completion given a motion prompt.
 
 ## MoCapAct Dataset
 The [MoCapAct dataset](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71) consists of:
@@ -78,29 +77,65 @@ On clips where the expert deviates from the clip (e.g., bottom right), the exper
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_016_22-0-82.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_038_03-0-208.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_015_04-1036-1217.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_061_01-172-377.mp4" type="video/mp4" controls></video></td>
 </tr>
 <tr>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_049_07-0-127.mp4" type="video/mp4" controls></video></td>
-  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_061_01-172-377.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_049_02-405-575.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_090_06-0-170.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/deterministic/CMU_075_09-0-203.mp4" type="video/mp4" controls></video></td>
 </tr>
 </table>
 
+The commands to generate the videos are:
+```bash
+python -m mocapact.download_dataset -t experts -d ./data \
+  -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
+python -m mocapact.clip_expert.evaluate \
+  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi_model \
+  --act_noise 0 \
+  --ghost_offset 1 \
+  --always_init_at_clip_start
+# other snippets are CMU_015_04-1036-1217, CMU_038_03-0-208, CMU_049_02-405-575, CMU_049_07-0-127,
+# CMU_061_01-172-377, CMU_075_09-0-203, CMU_090_06-0-170
+```
+
 ## Noisy Rollouts
 We generate the dataset by repeatedly rolling out the experts with some injected action noise and recording the observations, actions, rewards, etc.
 Below are videos showing noisy rollouts for the same clips from the previous section.
+
+For most snippets, the rollouts look very similar.
+This is because the experts are trained to track the MoCap clips in spite of the injected noise.
+This helps the learned multi-clip and GPT policies to correct the mistakes they make in a rollout.
 <table>
 <tr>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_016_22-0-82.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_038_03-0-208.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_015_04-1036-1217.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_061_01-172-377.mp4" type="video/mp4" controls></video></td>
 </tr>
 <tr>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_049_07-0-127.mp4" type="video/mp4" controls></video></td>
-  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_061_01-172-377.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_049_02-405-575.mp4" type="video/mp4" controls></video></td>
+  <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_090_06-0-170.mp4" type="video/mp4" controls></video></td>
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/clip_expert/noisy/CMU_075_09-0-203.mp4" type="video/mp4" controls></video></td>
 </tr>
 </table>
+
+The commands to generate the videos are:
+```bash
+python -m mocapact.download_dataset -t experts -d ./data \
+  -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
+python -m mocapact.clip_expert.evaluate
+  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi_model \
+  --act_noise 0.1 \
+  --ghost_offset 1 \
+  --termination_error_threshold 1 \
+  --always_init_at_clip_start
+# other snippets are CMU_015_04-1036-1217, CMU_038_03-0-208, CMU_049_02-405-575, CMU_049_07-0-127,
+# CMU_061_01-172-377, CMU_075_09-0-203, CMU_090_06-0-170
+```
+
 
 ## Multi-Clip Policy
 We then train a multi-clip policy on the dataset to track all the clips in <tt>dm_control</tt>.
@@ -123,6 +158,19 @@ On other clips, the policy can only track the clip for a short time before makin
   <td><video width="480" height="360" src="https://mhauskn.github.io/mocapact.github.io/assets/multiclip/CMU_075_09.mp4" type="video/mp4" controls></video></td>
 </tr>
 </table>
+
+To generate the videos, first download and unzip `multiclip_policy.tar.gz` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+Then, run:
+```bash
+python -m mocapact.distillation.evaluate \
+  --policy_path /path/to/multiclip_policy/full_dataset/model/model.ckpt \
+  --act_noise 0 \
+  --ghost_offset 1 \
+  --always_init_at_clip_start \
+  --termination_error_threshold 10 \
+  --clip_snippets CMU_016_22
+# other clips are CMU_015_04, CMU_038_03, CMU_049_07, CMU_061_01-172, CMU_069_56, CMU_075_09
+```
 
 ## Task Transfer
 We can re-use the low-level component of the mutli-clip policy to aid in learning new humanoid tasks.
@@ -159,6 +207,20 @@ In a velocity control task, we similarly find a low-level policy produces natura
   <td><img src="https://mhauskn.github.io/mocapact.github.io/assets/transfer/velocity_control/no_low_level.png" width="480"></td>
 </tr>
 </table>
+
+To generate the videos, first download and unzip `transfer.tar.gz` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+Then, (for the general low-level policy) run:
+```bash
+python -m mocapact.transfer.evaluate \
+  --model_root /path/to/transfer/go_to_target/general_low_level \
+  --task /path/to/mocapact/transfer/config.py:go_to_target
+python -m mocapact.transfer.evaluate \
+  --model_root /path/to/transfer/velocity_control/general_low_level \
+  --task /path/to/mocapact/transfer/config.py:velocity_control \
+  --task.config.steps_before_changing_velocity 333 \
+  --big_arena \
+  --episode_steps 2000
+```
 
 ## Motion Completion
 Inspired by sentence completion from NLP, we train a GPT policy to perform motion completion.
@@ -241,3 +303,24 @@ On other held-out clips, the policy fails shortly after the prompt, highlighting
   <td><center><img src="https://mhauskn.github.io/mocapact.github.io/assets/gpt/pca/CMU_015_04-1332-1513.png" width="360"></center></td>
 </tr>
 </table>
+
+To generate the videos, first download `gpt.ckpt` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+Then, run:
+```bash
+python -m mocapact.download_dataset -t experts -d ./data \
+  -c CMU_008_02,CMU_015_04,CMU_015_05,CMU_038_03,CMU_041_04,CMU_049_06,CMU_056_06,CMU_061_01,CMU_069_12,CMU_069_21,CMU_069_42,CMU_069_46
+python -m mocapact.distillation.motion_completion.py \
+  --policy_path /path/to/gpt.ckpt \
+  --nodeterministic \
+  --ghost_offset 1 \
+  --expert_root ./data/experts \
+  --max_steps 500 \
+  --always_init_at_clip_start \
+  --prompt_length 32 \
+  --min_steps 32 \
+  --device cuda \
+  --clip_snippet CMU_016_25
+# other clips are CMU_008_02, CMU_015_04-1332-1513, CMU_015_05-948-1139, CMU_038_03,
+# CMU_041_04, CMU_049_06, CMU_056_06-0-201, CMU_061_01-172-377, CMU_069_12,
+# CMU_069_21, CMU_069_42-0-206, CMU_069_46
+```
