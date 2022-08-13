@@ -1,3 +1,7 @@
+"""
+Dataset used for training a policy. Formed from a collection of
+HDF5 files and wrapped into a PyTorch Dataset.
+"""
 import bisect
 import h5py
 import itertools

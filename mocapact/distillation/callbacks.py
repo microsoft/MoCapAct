@@ -1,3 +1,6 @@
+"""
+Callbacks used during policy training.
+"""
 import os.path as osp
 from typing import Sequence, Text
 from pathlib import Path
@@ -16,7 +19,7 @@ from mocapact import utils
 
 class PolicyEvaluationCallback(Callback):
     """
-    A callback that rolls out the policy on a clip collection.
+    A callback that evaluates the policy on a clip collection.
     """
     def __init__(
         self,

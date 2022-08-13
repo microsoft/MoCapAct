@@ -36,6 +36,10 @@ def load_policy(
     device: Union[torch.device, str] = 'auto',
     seed: Optional[int] = None,
 ) -> 'stable_baselines3.BaseAlgorithm':
+    """
+    Loads a Stable-Baselines policy, which consists of a zip file of parameters
+    and a pickled VecNormalize environment for the observation statistics.
+    """
     # Normalization statistics
     with open(osp.join(model_path, 'vecnormalize.pkl'), 'rb') as f:
         norm_env = pickle.load(f)

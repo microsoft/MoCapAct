@@ -1,3 +1,6 @@
+"""
+Main script for training the clip experts.
+"""
 import os
 import os.path as osp
 import json

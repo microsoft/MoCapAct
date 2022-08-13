@@ -1,3 +1,6 @@
+"""
+Configs for the training script. Uses the ml_collections config library.
+"""
 from ml_collections import ConfigDict
 from mocapact import observables
 

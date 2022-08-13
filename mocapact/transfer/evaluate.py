@@ -1,3 +1,6 @@
+"""
+Script used for visualizing a policy for the RL transfer task.
+"""
 import os.path as osp
 import numpy as np
 import torch

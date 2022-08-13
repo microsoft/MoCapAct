@@ -1,3 +1,20 @@
+"""
+Model definitions. Includes:
+- MlpPolicy: A simple feedforward network.
+- HierarchicalMlpPolicy: A feedforward network with a encoder and decoder architecture.
+- NpmpPolicy: A recurrent stochastic encoder and feedforward decoder.
+- McpPolicy: A recurrent stochastic encoder, gating layer for primitives, and low-level primitives.
+- GPTPolicy: The GPT policy used for motion completion.
+
+The models all inherit from the `BasePolicy` class, which itself is a subclass of
+Stable-Baseline 3's `BasePolicy` and PyTorch Lightning's `LightningModule`.
+
+The Stable-Baseline functionality is meant for efficient parallel evaluation (e.g., in the `evaluate.py` script).
+The `_predict` function is to be implemented in the subclasses.
+
+The PyTorch Lightning functionality is meant for efficient training.
+The `initial_state`, `forward`, and `training_step` is to be implemented in the subclasses.
+"""
 from abc import abstractmethod
 import json
 from typing import Any, Dict, Optional, Sequence, Text, Tuple, Type, Union
@@ -90,6 +107,10 @@ class BasePolicy(policies.BasePolicy, pl.LightningModule):
     ###########################
     @abstractmethod
     def initial_state(self, batch_size=1, deterministic=False):
+        """
+        For recurrent policies or observations with history (e.g., for GPT),
+        the initial state for a training step or rollout episode.
+        """
         pass
 
     @abstractmethod
@@ -130,6 +151,17 @@ class BasePolicy(policies.BasePolicy, pl.LightningModule):
         state: torch.Tensor,
         deterministic: bool = False
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        The prediction function to be implemented.
+
+        From Stable-Baseline's documentation:
+
+        Get the action according to the policy for a given observation.
+
+        :param observation: the pre-processed observation
+        :param deterministic: Whether to use stochastic or deterministic actions
+        :return: Taken action according to the policy
+        """
         pass
 
     def predict(
@@ -139,6 +171,21 @@ class BasePolicy(policies.BasePolicy, pl.LightningModule):
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        """
+        From Stable-Baseline's documentation:
+
+        Get the policy action from an observation (and optional hidden state).
+        Includes sugar-coating to handle different observations (e.g., normalizing images).
+
+        :param observation: the input observation
+        :param state: The last hidden states (can be None, used in recurrent policies)
+        :param episode_start: The last masks (can be None, used in recurrent policies)
+            this correspond to beginning of episodes,
+            where the hidden states of the RNN must be reset.
+        :param deterministic: Whether or not to return deterministic actions.
+        :return: the model's action and the next hidden state
+            (used in recurrent policies)
+        """
         self.set_training_mode(False)
 
         observation, vectorized_env = self.obs_to_tensor(observation)
@@ -255,6 +302,9 @@ class MlpPolicy(BasePolicy):
         return (act_gaussian.mean, state)
 
 class HierarchicalMlpPolicy(BasePolicy):
+    """
+    TODO: Use StochasticEncoder for high-level encoder.
+    """
     def __init__(
         self,
         observation_space: gym.spaces.Space,
@@ -370,6 +420,9 @@ class HierarchicalMlpPolicy(BasePolicy):
 #######################################
 
 class StochasticEncoder(nn.Module):
+    """
+    Outputs a Gaussian distribution over encodings.
+    """
     def __init__(
         self,
         input_dim: int,
@@ -417,6 +470,15 @@ class StochasticEncoder(nn.Module):
         return Independent(Normal(embed_mean, std), 1)
 
 class NpmpPolicy(BasePolicy):
+    """
+    'Neural probabilistic motor primitive' architecture originally proposed in [1]
+    and the multi-clip policy used in MoCapAct. Consists of a recurrent stochastic encoder
+    and a feedforward decoder.
+
+    [1] Merel, Josh, Leonard Hasenclever, Alexandre Galashov, Arun Ahuja, Vu Pham,
+        Greg Wayne, Yee Whye Teh, and Nicolas Heess. "Neural probabilistic motor
+        primitives for humanoid control." arXiv preprint arXiv:1811.11711 (2018).
+    """
     def __init__(
         self,
         observation_space: gym.spaces.Space,
@@ -670,6 +732,15 @@ class McpPrimitives(nn.Module):
         return torch.stack(means, dim=-2), torch.stack(log_stds, dim=-2)
 
 class McpPolicy(BasePolicy):
+    """
+    The 'multiplicative compositional policy' architecture [1]. Our implementation consists
+    of a recurrent stochastic encoder, gating layer for choosing the primitives, and
+    low-level primitives layer.
+
+    [1] Peng, Xue Bin, Michael Chang, Grace Zhang, Pieter Abbeel, and Sergey Levine.
+        "MCP: Learning composable hierarchical control with multiplicative compositional policies."
+        Advances in Neural Information Processing Systems 32 (2019).
+    """
     def __init__(
         self,
         observation_space: gym.spaces.Space,
@@ -1058,6 +1129,9 @@ class GPT(nn.Module):
         return x
 
 class GPTPolicy(BasePolicy):
+    """
+    The GPT policy used for motion completion.
+    """
     def __init__(
         self,
         observation_space: gym.spaces.Space,

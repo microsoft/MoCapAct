@@ -1,3 +1,6 @@
+"""
+Main script for training a policy for a RL transfer task.
+"""
 import os.path as osp
 import gym
 import shutil

@@ -1,3 +1,6 @@
+"""
+Aliases of observables used for clip experts, distillation, and RL transfer.
+"""
 # All observables associated with the CMU humanoid and clip tracking task
 CMU_HUMANOID_OBSERVABLES = (
     'walker/actuator_activation',

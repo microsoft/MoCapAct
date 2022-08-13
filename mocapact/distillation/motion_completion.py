@@ -1,3 +1,6 @@
+"""
+Script used for performing motion completion with a trained GPT policy.
+"""
 import os
 import os.path as osp
 import numpy as np

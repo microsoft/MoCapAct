@@ -1,3 +1,6 @@
+"""
+Configs for the training script. Uses the ml_collections config library.
+"""
 from ml_collections import ConfigDict
 from dm_control.locomotion.tasks import go_to_target
 from mocapact.tasks import velocity_control

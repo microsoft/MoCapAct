@@ -1,3 +1,6 @@
+"""
+The motion completion task.
+"""
 from typing import Any, Callable, Optional, Sequence, Text, Union
 import numpy as np
 

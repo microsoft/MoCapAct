@@ -1,3 +1,8 @@
+"""
+Adaptation of Stable-Baseline's `evaluate_policy`. Also finds the
+normalized episode reward and length. Also allows for grabbing frames from
+the 'first' environment in the given VecEnv.
+"""
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 

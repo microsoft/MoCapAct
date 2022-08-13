@@ -1,3 +1,11 @@
+"""
+Wraps the dm_control environment and task into a Gym env. The task assumes
+the presence of a CMU position-controlled humanoid.
+
+Adapted from:
+https://github.com/denisyarats/dmc2gym/blob/master/dmc2gym/wrappers.py
+"""
+
 import os.path as osp
 import numpy as np
 import tree

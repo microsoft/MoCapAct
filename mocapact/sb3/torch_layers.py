@@ -1,6 +1,8 @@
 """
 Taken from
 https://github.com/Stable-Baselines-Team/stable-baselines3-contrib/blob/feat/layer-norm/sb3_contrib/common/torch_layers.py
+
+Used to include layer norm.
 """
 from typing import List, Type
 

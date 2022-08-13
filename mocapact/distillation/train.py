@@ -1,3 +1,6 @@
+"""
+Main script for training a policy given a dataset.
+"""
 import os
 import os.path as osp
 import random

@@ -1,3 +1,8 @@
+"""
+Adaptation of Stable-Baseline's `make_vec_env`. Allows for wrapping
+with a custom VecMonitor, in our case a VecMonitor that also monitors
+normalized episode reward and length.
+"""
 import os
 import numpy as np
 from typing import Any, Callable, Dict, Optional, Type, Union

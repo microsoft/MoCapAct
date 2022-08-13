@@ -1,3 +1,6 @@
+"""
+Callbacks used when training the clip experts.
+"""
 import os
 import os.path as osp
 import numpy as np
@@ -72,6 +75,9 @@ class EarlyStoppingCallback(BaseCallback):
         return True
 
 class MocapTrackingEvalCallback(EvalCallback):
+    """
+    An `EvalCallback` that additionally logs normalized episode rewards and lengths.
+    """
     def __init__(
         self,
         eval_env_ctor: Callable[[], Union[gym.Env, VecEnv]],

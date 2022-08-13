@@ -1,3 +1,6 @@
+"""
+Wraps the MultiClipMocapTracking dm_env into a Gym environment.
+"""
 import numpy as np
 from gym import spaces
 from typing import Any, Dict, Optional, Tuple

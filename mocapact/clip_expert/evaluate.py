@@ -1,3 +1,7 @@
+"""
+Script used for evaluating a clip expert. Can do parallel evaluation,
+saving statistics, saving videos, and visualizing the expert.
+"""
 import os
 import os.path as osp
 import numpy as np

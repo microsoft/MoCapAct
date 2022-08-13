@@ -1,3 +1,6 @@
+"""
+Script used to download a subset of the dataset.
+"""
 import argparse
 import os
 import os.path as osp

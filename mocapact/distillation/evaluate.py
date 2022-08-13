@@ -1,3 +1,7 @@
+"""
+Script used for evaluating a PyTorch Lightning policy. Can do parallel evaluation,
+saving statistics, saving videos, and visualizing the policy.
+"""
 import os.path as osp
 import numpy as np
 from absl import app, flags, logging

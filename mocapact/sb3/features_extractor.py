@@ -1,3 +1,8 @@
+"""
+The features extractor that maps the raw observation from the environment (dict of numerical arrays)
+to an observation that is passed to the policy's `predict` function (can be numerical array
+or dict of numerical arrays). Also handles observation normalization when doing policy evaluation.
+"""
 from typing import Dict, Optional, Sequence, Text, Tuple, Union
 import collections
 import numpy as np

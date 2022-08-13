@@ -1,3 +1,6 @@
+"""
+The velocity control task.
+"""
 import collections
 import numpy as np
 from dm_control import composer
