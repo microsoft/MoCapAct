@@ -18,6 +18,11 @@ This repo contains all code to:
 
 For more information on the project and to download the entire dataset, please visit the [project website](https://microsoft.github.io/MoCapAct/).
 
+For users interested in development, we recommend reading the following documentation on <tt>dm_control</tt>:
+- [The <tt>dm_control</tt> whitepaper](https://arxiv.org/abs/2006.12983)
+- [The <tt>dm_control</tt> README](https://github.com/deepmind/dm_control/blob/main/README.md)
+- [The README for <tt>dm_control</tt>'s locomotion task library](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/README.md)
+
 ## Setup
 MoCapAct requires Python 3.7+.
 We recommend that you use a virtual environment.
