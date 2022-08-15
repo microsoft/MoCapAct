@@ -10,8 +10,8 @@ title: 'MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control' layout: d
 
 ## Abstract
 Simulated humanoids are an appealing research domain due to their physical capabilities.
-Nonetheless, they are also a challenging control system, as a policy must drive an unstable, discontinuous, and high-dimensional physical system.
-One widely studied approach is to utilize motion capture (MoCap) data to teach the humanoid agent low-level skills (e.g., standing, walking, and running) that can be then be re-used to synthesize high-level behaviors.
+Nonetheless, they are also challenging to control, as a policy must drive an unstable, discontinuous, and high-dimensional physical system.
+One widely studied approach is to utilize motion capture (MoCap) data to teach the humanoid agent low-level skills (e.g., standing, walking, and running) that can then be re-used to synthesize high-level behaviors.
 However, even with MoCap data, controlling simulated humanoids remains very hard, as MoCap data offers only kinematic information. Finding physical control inputs to realize the demonstrated motions requires computationally intensive methods like reinforcement learning.
 Thus, despite the publicly available MoCap data, its utility has been limited to institutions with large-scale compute.
 In this work, we dramatically lower the barrier for productive research on this topic by training and releasing high-quality agents that can track over three hours of MoCap data for a simulated humanoid in the <tt>dm_control</tt> physics-based environment.
