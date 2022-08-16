@@ -324,3 +324,16 @@ python -m mocapact.distillation.motion_completion.py \
 # CMU_041_04, CMU_049_06, CMU_056_06-0-201, CMU_061_01-172-377, CMU_069_12,
 # CMU_069_21, CMU_069_42-0-206, CMU_069_46
 ```
+
+## Citation
+
+If you reference or use MoCapAct in your research, please cite:
+
+```bibtex
+@article{wagener2022mocapact,
+  title="{MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control}",
+  author={Wagener, Nolan and Kolobov, Andrey and Frujeri, Felipe Vieira and Loynd, Ricky and Cheng, Ching-An and Hausknecht, Matthew},
+  journal={arXiv preprint arXiv:2208.07363},
+  year={2022}
+}
+```
