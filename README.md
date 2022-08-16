@@ -232,6 +232,19 @@ To generate a prompt, we also input a path to the directory of snippet experts.
 Alternatively, you can pass a path to a multi-clip policy through `--distillation_path`, though it will likely produce lower-quality prompts than the snippet experts.
 </details>
 
+## Citation
+
+If you reference or use MoCapAct in your research, please cite:
+
+```bibtex
+@article{wagener2022mocapact,
+  title={{MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control}},
+  author={Wagener, Nolan and Kolobov, Andrey and Frujeri, Felipe Vieira and Loynd, Ricky and Cheng, Ching-An and Hausknecht, Matthew},
+  journal={arXiv preprint arXiv:2208.07363},
+  year={2022}
+}
+```
+
 ## Licenses
 The code is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 The dataset is licensed under the [CDLA Permissive v2 License](https://cdla.dev/permissive-2-0/).
