@@ -32,7 +32,7 @@ Please refer to Appendix B of our paper for the structure of the experts and HDF
 The zipped version of the MoCapAct dataset is available at the [dataset site](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
 We also provide a Python script to download a user-provided subset of the dataset.
 The scripts take the following flags: 
-- `-t`: a type from `<experts | small_dataset | larget_dataset>`,
+- `-t`: a type from `<experts | small_dataset | large_dataset>`,
 - `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_002_01`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) of form `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
 - `-d`: a destination path.
 
