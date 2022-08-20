@@ -39,17 +39,129 @@ cd MoCapAct
 pip install -e .
 ```
 
-## Downloading the Dataset
+## Dataset
+The MoCapAct dataset consists of clip experts trained on the MoCap snippets and the rollouts from those experts.
+
+### Downloading the Dataset
 We provide a Python script to download portions of the dataset.
 The script takes the following flags:
 - `-t`: a type from `<experts | small_dataset | large_dataset>`,
-- `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_002_01`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
+- `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_009_12`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
 - `-d`: a destination path.
 
 For example:
 ```bash
-python -m mocapact.download_dataset -t small_dataset -c CMU_001_01,CMU_002_01 -d ./data
+python -m mocapact.download_dataset -t experts -c CMU_009_12 -d ./data
+python -m mocapact.download_dataset -t small_dataset -c CMU_001_01,CMU_009_12 -d ./data
 ```
+### Description
+<details>
+<summary>Clip snippet experts</summary>
+We signify a clip snippet expert by the snippet it is tracking.
+Taking <tt>CMU_009_12-165-363</tt> as an example expert, the file hierarchy for the snippet expert is:
+
+```
+CMU_009_12-165-363
+├── clip_info.json         # Contains clip ID, start step, and end step
+└── eval_rsi/model
+    ├── best_model.zip     # Contains policy parameters and hyperparameters
+    └── vecnormalize.pkl   # Used to get normalizer for observation and reward
+```
+
+The expert policy can be loaded using our repository:
+```python
+from mocapact import observables
+from mocapact.sb3 import utils
+expert_path = "data/experts/CMU_009_12-165-363/eval_rsi/model"
+expert = utils.load_policy(expert_path, observables.TIME_INDEX_OBSERVABLES)
+
+from mocapact.envs import tracking
+from dm_control.locomotion.tasks.reference_pose import types
+dataset = types.ClipCollection(ids=['CMU_009_12'], start_steps=[165], end_steps=[363])
+env = tracking.MocapTrackingGymEnv(dataset)
+obs, done = env.reset(), False
+while not done:
+    action, _ = expert.predict(obs, deterministic=True)
+    obs, rew, done, _ = env.step(action)
+    print(rew)
+```
+</details>
+
+<details>
+<summary>Expert rollouts</summary>
+The expert rollouts consist of a collection of HDF5 files, one per clip.
+An HDF5 file contains expert rollouts for each constituent snippet as well as miscellaneous information and statistics.
+To facilitate efficient loading of the observations, we concatenate all the proprioceptive observations (joint angles, joint velocities, actuator activations, etc.) from an episode into a single numerical array and provide indices for the constituent observations in the <tt>observable_indices</tt> group.
+
+Taking <tt>CMU_009_12.hdf5</tt> (which contains three snippets) as an example, we have the following HDF5 hierarchy:
+```
+CMU_009_12.hdf5
+├── n_rsi_rollouts                # R, number of rollouts from random time steps in snippet
+├── n_start_rollouts              # S, number of rollouts from start of snippet
+├── ref_steps                     # Indices of MoCap reference relative to current time step. Here, (1, 2, 3, 4, 5).
+├── observable_indices
+│   └── walker
+│       ├── actuator_activation   # (0, 1, ..., 54, 55)
+│       ├── appendages_pos        # (56, 57, ..., 69, 70)
+│       ├── body_height           # (71)
+│       ├── ...
+│       └── world_zaxis           # (2865, 2866, 2867)
+│
+├── stats                         # Statistics computed over the entire dataset
+│   ├── act_mean                  # Mean of the experts' sampled actions
+│   ├── act_var                   # Variance of the experts' sampled actions
+│   ├── mean_act_mean             # Mean of the experts' mean actions
+│   ├── mean_act_var              # Variance of the experts' mean actions
+│   ├── proprio_mean              # Mean of the proprioceptive observations
+│   ├── proprio_var               # Variance of the proprioceptive observations
+│   └── count                     # Number of observations in dataset
+│
+├── CMU_009_12-0-198              # Rollouts for the snippet CMU_009_12-0-198
+├── CMU_009_12-165-363            # Rollouts for the snippet CMU_009_12-165-363
+└── CMU_009_12-330-529            # Rollouts for the snippet CMU_009_12-330-529
+```
+
+Each snippet group contains $R+S$ snippets.
+The first $S$ episodes correspond to episodes initialized from the start of the snippet and the last $R$ episodes to episodes initialized at random points in the snippet.
+We now uncollapse the <tt>CMU_009_12-165-363</tt> group within the HDF5 file to reveal the rollout structure:
+```
+CMU_009_12-165-363
+├── early_termination                  # (R+S)-boolean array indicating which episodes terminated early
+├── rsi_metrics                        # Metrics for episodes that initialize at random points in snippet
+│   ├── episode_returns                # R-array of episode returns
+│   ├── episode_lengths                # R-array of episode lengths
+│   ├── norm_episode_returns           # R-array of normalized episode rewards
+│   └── norm_episode_lengths           # R-array of normalized episode lengths
+├── start_metrics                      # Metrics for episodes that initialize at start in snippet
+│
+├── 0                                  # First episode, of length T
+│   ├── observations
+│   │   ├── proprioceptive             # (T+1)-array of proprioceptive observations
+│   │   ├── walker/body_camera         # (T+1)-array of images from body camera **(not included)**
+│   │   └── walker/egocentric_camera   # (T+1)-array of images from egocentric camera **(not included)**
+│   ├── actions                        # T-array of sampled actions executed in environment
+│   ├── mean_actions                   # T-array of corresponding mean actions
+│   ├── rewards                        # T-array of rewards from environment
+│   ├── values                         # T-array computed using the policy's value network
+│   └── advantages                     # T-array computed using generalized advantage estimation
+│
+├── 1                                  # Second episode
+├── ...
+└── R+S-1                              # (R+S)th episode
+```
+To keep the dataset size manageable, we do *not* include image observations in the dataset.
+The camera images can be logged by providing the flags `--log_all_proprios --log_cameras` to the `mocapact/distillation/rollout_experts.py` script.
+
+The HDF5 rollouts can be read and utilized in Python:
+```python
+import h5py
+dset = h5py.File("data/small_dataset/CMU_009_12.hdf5", "r")
+print("Expert actions from first rollout episode of second snippet:")
+print(dset["CMU_009_12-165-363/0/actions"][...])
+```
+
+We provide a "large" dataset where $R = S = 100$ (with size 600 GB) and a "small" dataset where $R = S = 10$ (with size 50 GB).
+</details>
 
 ## Examples
 
