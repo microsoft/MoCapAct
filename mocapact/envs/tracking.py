@@ -3,7 +3,8 @@ Wraps the MultiClipMocapTracking dm_env into a Gym environment.
 """
 import numpy as np
 from gym import spaces
-from typing import Any, Dict, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple, Union
 
 from dm_control.locomotion.mocap import cmu_mocap_data
 from dm_control.locomotion.tasks.reference_pose import types
@@ -21,6 +22,7 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         self,
         dataset: Optional[types.ClipCollection] = None,
         ref_steps: Tuple[int] = (0,),
+        mocap_path: Optional[Union[str, Path]] = None,
         task_kwargs: Optional[Dict[str, Any]] = None,
         environment_kwargs: Optional[Dict[str, Any]] = None,
         act_noise: float = 0.,
@@ -38,7 +40,7 @@ class MocapTrackingGymEnv(dm_control_wrapper.DmControlWrapper):
         self._enable_cameras = enable_cameras
         self._include_clip_id = include_clip_id
         task_kwargs = task_kwargs or dict()
-        task_kwargs['ref_path'] = cmu_mocap_data.get_path_for_cmu(version='2020')
+        task_kwargs['ref_path'] = mocap_path if mocap_path else cmu_mocap_data.get_path_for_cmu(version='2020')
         task_kwargs['dataset'] = self._dataset
         task_kwargs['ref_steps'] = ref_steps
         super().__init__(

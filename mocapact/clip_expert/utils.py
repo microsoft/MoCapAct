@@ -1,9 +1,11 @@
 import numpy as np
-from typing import Optional, Text
+from pathlib import Path
+from typing import Optional, Text, Union
 from dm_control.locomotion.tasks.reference_pose import types
 
 def make_env_kwargs(
     clip_id: Text,
+    mocap_path: Optional[Union[str, Path]] = None,
     start_step: Optional[int] = None,
     end_step: Optional[int] = None,
     min_steps: int = 10,
@@ -31,6 +33,7 @@ def make_env_kwargs(
     env_kwargs = dict(
         dataset=dataset,
         ref_steps=(0,),
+        mocap_path=mocap_path,
         act_noise=act_noise,
         task_kwargs=task_kwargs
     )

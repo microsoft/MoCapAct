@@ -35,6 +35,7 @@ flags.DEFINE_string("clip_id", None, "Name of reference clip. See cmu_subsets.py
 flags.DEFINE_string("log_root", None, "Directory where logs are stored")
 flags.DEFINE_integer("start_step", 0, "Start step in clip")
 flags.DEFINE_integer("max_steps", 256, "Maximum steps from start step")
+flags.DEFINE_string("mocap_path", None, "Path to MoCap HDF5. If None, uses dm_control's MoCap data")
 flags.DEFINE_float("act_noise", 0.1, "Action noise to apply")
 flags.DEFINE_integer("min_steps", 1, "Minimum steps in a rollout")
 flags.DEFINE_float("termination_error_threshold", 0.3, "Error for cutting off rollout")
@@ -91,6 +92,7 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
              termination_error_threshold=float('inf')):
     env_kwargs = clip_expert_utils.make_env_kwargs(
         FLAGS.clip_id,
+        mocap_path=FLAGS.mocap_path,
         start_step=start_step,
         end_step=end_step,
         min_steps=min_steps,
@@ -113,7 +115,7 @@ def make_env(seed=0, start_step=0, end_step=0, min_steps=10, training=True,
     return env
 
 def main(_):
-    clip_length = utils.get_clip_length(FLAGS.clip_id)
+    clip_length = utils.get_clip_length(FLAGS.clip_id, FLAGS.mocap_path)
     snippet_length = min(clip_length - FLAGS.start_step, FLAGS.max_steps)
     end_step = FLAGS.start_step + snippet_length
 

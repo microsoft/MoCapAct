@@ -27,6 +27,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("policy_root", None, "Path to the policy")
 flags.DEFINE_integer("min_steps", 10, "Minimum number of steps (used for RSI)")
 flags.DEFINE_float("act_noise", 0.1, "Action noise in humanoid")
+flags.DEFINE_string("mocap_path", None, "Path to MoCap HDF5. If None, uses dm_control's MoCap data")
 
 # Visualization hyperparameters
 flags.DEFINE_bool("visualize", True, "Whether to visualize via GUI")
@@ -55,6 +56,7 @@ def main(_):
     end_step = clip_info['end_step']
     env_kwargs = clip_expert_utils.make_env_kwargs(
         clip_id,
+        FLAGS.mocap_path,
         start_step,
         end_step,
         FLAGS.min_steps-1,
