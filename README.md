@@ -344,8 +344,11 @@ To generate a prompt, we also input a path to the directory of snippet experts.
 Alternatively, you can pass a path to a multi-clip policy through `--distillation_path`, though it will likely produce lower-quality prompts than the snippet experts.
 </details>
 
-## Citation
+## Future Plans
+We are happy to work with the community to fix bugs and expand functionality of MoCapAct.
+This will include incorporating pull requests and allowing for MoCap clips to be added in the form of HDF5 files.
 
+## Citation
 If you reference or use MoCapAct in your research, please cite:
 
 ```bibtex
