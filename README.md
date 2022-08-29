@@ -348,6 +348,8 @@ Alternatively, you can pass a path to a multi-clip policy through `--distillatio
 We are happy to work with the community to fix bugs and expand functionality of MoCapAct.
 This will include incorporating pull requests and allowing for MoCap clips to be added in the form of HDF5 files.
 
+We will soon add D4RL bindings so researchers can use MoCapAct for offline reinforcement learning.
+
 ## Citation
 If you reference or use MoCapAct in your research, please cite:
 
