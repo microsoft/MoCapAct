@@ -330,10 +330,10 @@ python -m mocapact.distillation.motion_completion.py \
 If you reference or use MoCapAct in your research, please cite:
 
 ```bibtex
-@article{wagener2022mocapact,
+@inproceedings{wagener2022mocapact,
   title="{MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control}",
   author={Wagener, Nolan and Kolobov, Andrey and Frujeri, Felipe Vieira and Loynd, Ricky and Cheng, Ching-An and Hausknecht, Matthew},
-  journal={arXiv preprint arXiv:2208.07363},
+  booktitle={Neural Information Processing Systems Datasets and Benchmarks Track},
   year={2022}
 }
 ```
