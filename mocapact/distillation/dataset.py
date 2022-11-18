@@ -262,15 +262,17 @@ class ExpertDataset(Dataset):
         self._total_len = 0
         self._dset_indices = []
         self._logical_indices, self._dset_groups = [[] for _ in self._hdf5_fnames], [[] for _ in self._hdf5_fnames]
+        self._early_terminations = [[] for _ in self._hdf5_fnames]
         self._snippet_len_weights = [[] for _ in self._hdf5_fnames]
         iterator = zip(
             self._hdf5_fnames,
             self._clip_snippets,
             self._logical_indices,
             self._dset_groups,
+            self._early_terminations,
             self._snippet_len_weights
         )
-        for fname, clip_snippets, logical_indices, dset_groups, snippet_len_weights in iterator:
+        for fname, clip_snippets, logical_indices, dset_groups, early_terminations, snippet_len_weights in iterator:
             with h5py.File(fname, 'r') as dset:
                 self._dset_indices.append(self._total_len)
                 dset_start_rollouts = dset['n_start_rollouts'][...]
@@ -287,8 +289,10 @@ class ExpertDataset(Dataset):
                         dset[f"{snippet}/rsi_metrics/episode_lengths"][:n_rsi_rollouts]
                     )
                     for i, ep_len in enumerate(len_iterator):
+                        episode = i if i < n_start_rollouts else i-n_start_rollouts+dset_start_rollouts
                         logical_indices.append(self._total_len)
-                        dset_groups.append(f"{snippet}/{i if i < n_start_rollouts else i-n_start_rollouts+dset_start_rollouts}")
+                        dset_groups.append(f"{snippet}/{episode}")
+                        early_terminations.append(dset[f"{snippet}/early_termination"][episode])
                         snippet_len_weights.append(snippet_weight)
                         if ep_len < self._min_seq_steps:
                             continue

@@ -344,11 +344,16 @@ To generate a prompt, we also input a path to the directory of snippet experts.
 Alternatively, you can pass a path to a multi-clip policy through `--distillation_path`, though it will likely produce lower-quality prompts than the snippet experts.
 </details>
 
+## Dataset Interface
+We provide two datasets in this repo.
+The [`ExpertDataset`](https://github.com/microsoft/MoCapAct/blob/main/mocapact/distillation/dataset.py) is used to perform imitation learning, e.g., to train a multi-clip tracking policy or a GPT policy for motion completion.
+The [`D4RLDataset`](https://github.com/microsoft/MoCapAct/blob/main/mocapact/offline_rl/d4rl_dataset.py) is used for offline reinforcement learning. 
+For small enough instantiations of the datasets that fit into memory, the user can use `D4RLDataset.get_in_memory_rollouts()` to load a batch of transitions into memory.
+For instantiations that do not fit into memory (e.g., the entire MoCapAct dataset), the user can use the dataset as a PyTorch `Dataset` by using an iterator over the transitions obtained by using `__getitem__()`.
+
 ## Future Plans
 We are happy to work with the community to fix bugs and expand functionality of MoCapAct.
 This will include incorporating pull requests and allowing for MoCap clips to be added in the form of HDF5 files.
-
-We will soon add D4RL bindings so researchers can use MoCapAct for offline reinforcement learning.
 
 ## Citation
 If you reference or use MoCapAct in your research, please cite:
