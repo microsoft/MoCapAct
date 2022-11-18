@@ -11,6 +11,7 @@ setup(
         'azure.storage.blob==12.9.0',
         'cloudpickle>=2.1.0',
         'dm_control>=1.0.7',
+        'gym==0.21',
         'h5py',
         'imageio',
         'imageio-ffmpeg',
