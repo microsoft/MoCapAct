@@ -6,6 +6,7 @@
 
 [![Code License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) &nbsp;&nbsp;&nbsp;&nbsp; [<img src="https://cdla.dev/wp-content/uploads/sites/52/2017/10/cdla_logo.png" alt="Dataset License" width="150"/>](https://cdla.dev/permissive-2-0/)
 
+<b>Paper: [MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control](https://arxiv.org/abs/2208.07363)</b>
 
 This is the codebase for the MoCapAct project, which uses motion capture (MoCap) clips to learn low-level motor skills for the "CMU Humanoid" from the <tt>dm_control</tt> package.
 This repo contains all code to:
