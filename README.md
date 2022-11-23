@@ -44,7 +44,9 @@ pip install -e .
 The MoCapAct dataset consists of clip experts trained on the MoCap snippets and the rollouts from those experts.
 
 ### Downloading the Dataset
-We provide a Python script to download portions of the dataset.
+The entire dataset may be downloaded from the [MSR Open Data page](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+
+Alternatively, we provide a Python script to download portions of the dataset.
 The script takes the following flags:
 - `-t`: a type from `<experts | small_dataset | large_dataset>`,
 - `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_009_12`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
