@@ -248,6 +248,7 @@ python -m mocapact.distillation.train \
   --output_root multi_clip/all \
   --gpus 0 `# indices of GPUs` \
   $(cat cfg/multi_clip/train.txt) \
+  $(cat cfg/multi_clip/rwr.txt) `# rwr can be replaced with awr, cwr, or bc` \
   --model.config.embed_size 60 \
   --eval.n_workers [N_CPU] `# e.g., 16`
 ```
@@ -262,6 +263,7 @@ python -m mocapact.distillation.train \
   --output_root multi_clip/locomotion \
   --gpus 0 `# indices of GPUs` \
   $(cat cfg/multi_clip/train.txt) \
+  $(cat cfg/multi_clip/rwr.txt) `# rwr can be replaced with awr, cwr, or bc` \
   --model.config.embed_size 20 \
   --eval.n_workers [N_CPU] `# e.g., 16`
 ```

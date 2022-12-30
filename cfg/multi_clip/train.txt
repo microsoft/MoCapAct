@@ -5,8 +5,6 @@
 --batch_size 256 \
 --clip_len_upsampling \
 --normalize_obs \
---temperature 4. \
---noadvantage_weights \
 --save_every_n_minutes 60 \
 --eval_mode train_start \
 --eval_mode train_rsi \
