@@ -365,9 +365,11 @@ If you reference or use MoCapAct in your research, please cite:
 
 ```bibtex
 @inproceedings{wagener2022mocapact,
-  title={{MoCapAct: A Multi-Task Dataset for Simulated Humanoid Control}},
+  title={{MoCapAct}: A Multi-Task Dataset for Simulated Humanoid Control},
   author={Wagener, Nolan and Kolobov, Andrey and Frujeri, Felipe Vieira and Loynd, Ricky and Cheng, Ching-An and Hausknecht, Matthew},
-  booktitle={Neural Information Processing Systems Datasets and Benchmarks Track},
+  booktitle={Advances in Neural Information Processing Systems},
+  volume={35},
+  pages={35418--35431},
   year={2022}
 }
 ```
