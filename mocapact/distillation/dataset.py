@@ -317,7 +317,7 @@ class ExpertDataset(Dataset):
         TODO
         """
         if idx >= len(self):
-            raise IndexError("dataset index out of range")
+            raise IndexError("Dataset index out of range")
 
         dset_idx = bisect.bisect_right(self._dset_indices, idx)-1
 
