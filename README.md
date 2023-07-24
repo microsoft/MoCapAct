@@ -44,7 +44,7 @@ pip install -e .
 The MoCapAct dataset consists of clip experts trained on the MoCap snippets and the rollouts from those experts.
 
 ### Downloading the Dataset
-The entire dataset may be downloaded from the [MSR Open Data page](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+The entire dataset may be downloaded from the [MSR Open Data page](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/).
 
 Alternatively, we provide a Python script to download portions of the dataset.
 The script takes the following flags:
