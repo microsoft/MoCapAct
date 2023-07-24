@@ -7,7 +7,7 @@ buttons:
   Talk: 'https://www.youtube.com/watch?v=gzdz51zQV2s'
   Poster: 'https://www.dropbox.com/s/anjut7qu166qw9r/Poster.pptx?dl=0'
   Slides: 'https://www.dropbox.com/s/foo71jhd26ls8nb/Presentation%20%28Long%29.pptx?dl=0'
-  Dataset: 'https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71'
+  Dataset: 'https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/'
   Code: 'https://github.com/microsoft/MoCapAct'
 remote_theme: pages-themes/cayman@v0.2.0
 plugins:
