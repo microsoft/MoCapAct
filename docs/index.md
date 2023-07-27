@@ -20,7 +20,7 @@ We demonstrate the utility of MoCapAct by using it to train a <em>single</em> hi
 Finally, we use MoCapAct to train an autoregressive GPT model and show that it can control a simulated humanoid to perform natural motion completion given a motion prompt.
 
 ## MoCapAct Dataset
-The [MoCapAct dataset](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71) consists of:
+The [MoCapAct dataset](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/) consists of:
 - expert policies that are trained to track individual clip snippets and
 - HDF5 files of noisy rollouts collected from each expert.
 
@@ -29,7 +29,7 @@ The HDF5 files can be used to train a multi-clip policy or GPT policy.
 Please refer to Appendix B of our paper for the structure of the experts and HDF5 files.
 
 ## Download Instructions
-The zipped version of the MoCapAct dataset is available at the [dataset site](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+The zipped version of the MoCapAct dataset is available at the [dataset site](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/).
 We also provide a Python script to download a user-provided subset of the dataset.
 The scripts take the following flags: 
 - `-t`: a type from `<experts | small_dataset | large_dataset>`,
@@ -159,7 +159,7 @@ On other clips, the policy can only track the clip for a short time before makin
 </tr>
 </table>
 
-To generate the videos, first download and unzip `multiclip_policy.tar.gz` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+To generate the videos, first download and unzip `multiclip_policy.tar.gz` from the [dataset website](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/).
 Then, run:
 ```bash
 python -m mocapact.distillation.evaluate \
@@ -208,7 +208,7 @@ In a velocity control task, we similarly find a low-level policy produces natura
 </tr>
 </table>
 
-To generate the videos, first download and unzip `transfer.tar.gz` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+To generate the videos, first download and unzip `transfer.tar.gz` from the [dataset website](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/).
 Then, (for the general low-level policy) run:
 ```bash
 python -m mocapact.transfer.evaluate \
@@ -304,7 +304,7 @@ On other held-out clips, the policy fails shortly after the prompt, highlighting
 </tr>
 </table>
 
-To generate the videos, first download `gpt.ckpt` from the [dataset website](https://msropendata.com/datasets/201fda85-b888-40b6-9554-1832ef203c71).
+To generate the videos, first download `gpt.ckpt` from the [dataset website](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/).
 Then, run:
 ```bash
 python -m mocapact.download_dataset -t experts -d ./data \
