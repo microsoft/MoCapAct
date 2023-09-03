@@ -114,7 +114,7 @@ src=https://msropendataset01.blob.core.windows.net/motioncapturewithactionsmocap
 ./azcopy copy $src /path/to/dst --recursive
 ```
 
-The value for `file` can be any of the files in the MoCapAct blob.
+The value for `file` can be any of the files in the MoCapAct blob, shown below.
 <p align="center">
   <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/files.png" alt="montage" width="50%">
 </p>
