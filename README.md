@@ -121,7 +121,7 @@ The value for `file` can be any of the files in the MoCapAct blob, shown below.
 
 </details>
 
-Finally, we provide an AzCopy-based Python script to download portions of the dataset.
+Finally, we provide an AzCopy-based Python script to download portions of the dataset, though this method has much slower download speeds than the other two methods.
 
 <details>
 <summary>Python script</summary>
