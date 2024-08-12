@@ -92,7 +92,7 @@ The commands to generate the videos are:
 python -m mocapact.download_dataset -t experts -d ./data \
   -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
 python -m mocapact.clip_expert.evaluate \
-  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi_model \
+  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi/model \
   --act_noise 0 \
   --ghost_offset 1 \
   --always_init_at_clip_start
@@ -127,7 +127,7 @@ The commands to generate the videos are:
 python -m mocapact.download_dataset -t experts -d ./data \
   -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
 python -m mocapact.clip_expert.evaluate
-  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi_model \
+  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi/model \
   --act_noise 0.1 \
   --ghost_offset 1 \
   --termination_error_threshold 1 \
