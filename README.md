@@ -43,100 +43,9 @@ pip install -e .
 ## Dataset
 The MoCapAct dataset consists of clip experts trained on the MoCap snippets and the rollouts from those experts.
 
-### Downloading the Dataset
-We recommend using Azure Storage Explorer to download the dataset, which we detail below.
-
-<details>
-<summary>Azure Storage Explorer</summary>
-
-First, [install Azure Storage Explorer](https://snapcraft.io/install/storage-explorer/ubuntu). This can be done with snap:
-```bash
-sudo snap install storage-explorer
-```
-
-Then, open Azure Storage Explorer.
-Click the "Open Connect Dialog" button.
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/azure_storage_explorer.png" alt="montage" width="70%">
-</p>
-
-In the "Connect to Azure Storage" window that opens, click the "Blob container or directory" option.
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/select_resource.png" alt="montage" width="60%">
-</p>
-
-Select "Shared access signature URL (SAS)" and click "Next".
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/sas.png" alt="montage" width="60%">
-</p>
-
-In an Internet browser, go to the [MoCapAct page on Microsoft Research](https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/) and copy the link given by the "Download Dataset" button.
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/website.png" alt="montage" width="40%">
-</p>
-
-In Azure Storage Explorer, paste the copied URL into the "Blob container or directory SAS URL" box.
-Put a desired name in the "Display name" box (e.g., "MoCapAct").
-Click "Next" and then "Connect".
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/connection_info.png" alt="montage" width="60%">
-</p>
-
-If successful, you should see the dataset files in the window.
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/dataset.png" alt="montage" width="70%">
-</p>
-</details>
-
-Alternatively, the AzCopy program can be used to download files from the command line.
-
-<details>
-<summary>AzCopy</summary>
-
-Download the AzCopy tar file from the [product page](https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10#download-azcopy) ([direct link to x86 Linux tar file](https://aka.ms/downloadazcopy-v10-linux)).
-Unzip the file and then go to the AzCopy directory:
-```bash
-tar -xf /path/to/azcopy.tar.gz
-cd /path/to/azcopy
-```
-
-Next, use the `azcopy` command to download the desired file from the MoCapAct blob.
-
-```bash
-file=README.md # use the empty string "" to download everything in the blob
-
-# Source URL can be copied from "Download Dataset" in Microsoft Research page:
-# https://www.microsoft.com/en-us/research/publication/mocapact-a-multi-task-dataset-for-simulated-humanoid-control/
-# Note the presence of `${file}$` in the middle of `src` and backslashes `\` before `?`, `=`, and `&`.
-src=https://msropendataset01.blob.core.windows.net/motioncapturewithactionsmocapact-u20220731/${file}\?sp\=rl\&st\=2023-08-22T17:20:43Z\&se\=2026-07-02T01:20:43Z\&spr\=https\&sv\=2022-11-02\&sr\=c\&sig\=L9f3Y8jAz3SCoAM5U5g9uCs0pmTI40rDLh2ZGC7OxE8%3D
-
-./azcopy copy $src /path/to/dst --recursive
-```
-
-The value for `file` can be any of the files in the MoCapAct blob, shown below.
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mhauskn/mocapact.github.io/master/assets/download/files.png" alt="montage" width="50%">
-</p>
-
-</details>
-
-Finally, we provide an AzCopy-based Python script to download portions of the dataset, though this method has much slower download speeds than the other two methods.
-
-<details>
-<summary>Python script</summary>
-
-The script takes the following flags:
-- `-t`: a type from `<experts | small_dataset | large_dataset>`,
-- `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_009_12`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
-- `-d`: a destination path.
-
-For example:
-```bash
-python -m mocapact.download_dataset -t experts -c CMU_009_12 -d ./data
-python -m mocapact.download_dataset -t small_dataset -c CMU_001_01,CMU_009_12 -d ./data
-```
-</details>
+We provide the dataset and models on the [MoCapAct collection on Hugging Face](https://huggingface.co/collections/microsoft/mocapact-66c030d8579a37e69ae3cb26). This collection consists of two pages:
+- A [model zoo](https://huggingface.co/microsoft/mocapact-models) which contains the clip snippet experts, multiclip policies, RL-trained policies for the transfer tasks, and the GPT policy.
+- A [dataset page](https://huggingface.co/datasets/microsoft/mocapact-data) which contains the small rollout dataset and large rollout dataset.
 
 ### Description
 <details>
@@ -436,10 +345,6 @@ The [`ExpertDataset`](https://github.com/microsoft/MoCapAct/blob/main/mocapact/d
 The [`D4RLDataset`](https://github.com/microsoft/MoCapAct/blob/main/mocapact/offline_rl/d4rl_dataset.py) is used for offline reinforcement learning. 
 For small enough instantiations of the datasets that fit into memory, the user can use `D4RLDataset.get_in_memory_rollouts()` to load a batch of transitions into memory.
 For instantiations that do not fit into memory (e.g., the entire MoCapAct dataset), the user can use the dataset as a PyTorch `Dataset` by using an iterator over the transitions obtained by using `__getitem__()`.
-
-## Future Plans
-We are happy to work with the community to fix bugs and expand functionality of MoCapAct.
-This will include incorporating pull requests and allowing for MoCap clips to be added in the form of HDF5 files.
 
 ## Citation
 If you reference or use MoCapAct in your research, please cite:
