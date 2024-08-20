@@ -29,24 +29,17 @@ The HDF5 files can be used to train a multi-clip policy or GPT policy.
 Please refer to Appendix B of our paper for the structure of the experts and HDF5 files.
 
 ## Download Instructions
-The zipped version of the MoCapAct dataset is available at the [dataset](https://github.com/microsoft/MoCapAct#dataset).
-We also provide a Python script to download a user-provided subset of the dataset.
-The scripts take the following flags: 
-- `-t`: a type from `<experts | small_dataset | large_dataset>`,
-- `-c`: a comma-separated list of clips (e.g., `CMU_001_01,CMU_002_01`) or a specific subset from <tt>dm_control</tt>'s [MoCap subsets](https://github.com/deepmind/dm_control/blob/main/dm_control/locomotion/tasks/reference_pose/cmu_subsets.py) of form `<get_up | walk_tiny | run_jump_tiny | locomotion_small | all>`, and
-- `-d`: a destination path.
+We provide the dataset and models on the [MoCapAct collection on Hugging Face](https://huggingface.co/collections/microsoft/mocapact-66c030d8579a37e69ae3cb26). This collection consists of two pages:
+- A [model zoo](https://huggingface.co/microsoft/mocapact-models) which contains the clip snippet experts, multiclip policies, RL-trained policies for the transfer tasks, and the GPT policy.
+- A [dataset page](https://huggingface.co/datasets/microsoft/mocapact-data) which contains the small rollout dataset and large rollout dataset.
 
-For example:
-```bash
-python -m mocapact.download_dataset -t small_dataset -c CMU_001_01,CMU_002_01 -d ./data
-python -m mocapact.download_dataset -t experts -c CMU_083_33 -d ./data
-```
-
-The expert can then be loaded using our package:
+We also provide example experts and rollouts to allow users to run the upcoming examples and to familiarize with the dataset files before downloading the full dataset.
+The example experts are located [here](https://huggingface.co/microsoft/mocapact-models/tree/main/sample), and the example rollout data files are located [here](https://huggingface.co/datasets/microsoft/mocapact-data/tree/main/sample).
+For instance, after downloading the example experts, an expert can be loaded using our package:
 ```python
 from mocapact import observables
 from mocapact.sb3 import utils
-expert_path = "data/experts/CMU_083_33-0-194/eval_rsi/model"
+expert_path = "/path/to/example_experts/CMU_083_33/CMU_083_33-0-194/eval_rsi/model"
 expert = utils.load_policy(expert_path, observables.TIME_INDEX_OBSERVABLES)
 
 from mocapact.envs import tracking
@@ -59,12 +52,12 @@ while not done:
     obs, rew, done, _ = env.step(action)
     print(rew)
 ```
-The HDF5 rollouts files can be read and utilized in Python:
+After downloading the example small rollouts, the HDF5 rollouts files can be read and utilized in Python:
 ```python
 import h5py
-dset = h5py.File("data/small_dataset/CMU_002_01.hdf5", "r")
+dset = h5py.File("/path/to/example_small_dataset/CMU_083_33.hdf5", "r")
 print("Expert actions from first rollout episode:")
-print(dset["CMU_002_01-0-92/0/actions"][...])
+print(dset["CMU_083_33-0-194/0/actions"][...])
 ```
 
 ## Clip Snippet Experts
@@ -87,12 +80,10 @@ On clips where the expert deviates from the clip (e.g., bottom right), the exper
 </tr>
 </table>
 
-The commands to generate the videos are:
+The commands to generate the videos from the example experts are:
 ```bash
-python -m mocapact.download_dataset -t experts -d ./data \
-  -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
 python -m mocapact.clip_expert.evaluate \
-  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi/model \
+  --policy_root /path/to/example_experts/CMU_016_22/CMU_016_22-0-82/eval_rsi/model \
   --act_noise 0 \
   --ghost_offset 1 \
   --always_init_at_clip_start
@@ -122,12 +113,10 @@ This helps the learned multi-clip and GPT policies to correct the mistakes they 
 </tr>
 </table>
 
-The commands to generate the videos are:
+The commands to generate the videos from the example experts are:
 ```bash
-python -m mocapact.download_dataset -t experts -d ./data \
-  -c CMU_015_04,CMU_016_22,CMU_038_03,CMU_049_02,CMU_049_07,CMU_061_01,CMU_075_09,CMU_090_06
 python -m mocapact.clip_expert.evaluate
-  --policy_root ./data/experts/CMU_016_22-0-82/eval_rsi/model \
+  --policy_root /path/to/example_experts/CMU_016_22/CMU_016_22-0-82/eval_rsi/model \
   --act_noise 0.1 \
   --ghost_offset 1 \
   --termination_error_threshold 1 \
@@ -304,16 +293,14 @@ On other held-out clips, the policy fails shortly after the prompt, highlighting
 </tr>
 </table>
 
-To generate the videos, first download `gpt.ckpt` from the [dataset](https://github.com/microsoft/MoCapAct#dataset).
+To generate the videos, first download `gpt.ckpt` from the [dataset](https://github.com/microsoft/MoCapAct#dataset) and the example experts.
 Then, run:
 ```bash
-python -m mocapact.download_dataset -t experts -d ./data \
-  -c CMU_008_02,CMU_015_04,CMU_015_05,CMU_038_03,CMU_041_04,CMU_049_06,CMU_056_06,CMU_061_01,CMU_069_12,CMU_069_21,CMU_069_42,CMU_069_46
 python -m mocapact.distillation.motion_completion.py \
   --policy_path /path/to/gpt.ckpt \
   --nodeterministic \
   --ghost_offset 1 \
-  --expert_root ./data/experts \
+  --expert_root /path/to/example_experts/CMU_016_25 \
   --max_steps 500 \
   --always_init_at_clip_start \
   --prompt_length 32 \
