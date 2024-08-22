@@ -346,6 +346,12 @@ The [`D4RLDataset`](https://github.com/microsoft/MoCapAct/blob/main/mocapact/off
 For small enough instantiations of the datasets that fit into memory, the user can use `D4RLDataset.get_in_memory_rollouts()` to load a batch of transitions into memory.
 For instantiations that do not fit into memory (e.g., the entire MoCapAct dataset), the user can use the dataset as a PyTorch `Dataset` by using an iterator over the transitions obtained by using `__getitem__()`.
 
+## Example Projects that Have Used MoCapAct
+- H-GAP: Humanoid Control with a Generalist Planner, by Zhengyao Jiang, Yingchen Xu, et al. ([Paper](https://arxiv.org/abs/2312.02682), [Website](https://yingchenxu.com/hgap), [Code](https://github.com/facebookresearch/hgap))
+- Leveraging Demonstrations with Latent Space Priors, by Jonas Gehring et al. ([Paper](https://arxiv.org/abs/2210.14685), [Website](https://facebookresearch.github.io/latent-space-priors/), [Code](https://github.com/facebookresearch/latent-space-priors))
+- Hierarchical World Models as Visual Whole-Body Humanoid Controllers, by Nicklas Hansen et al. ([Paper](https://arxiv.org/abs/2405.18418), [Website](https://www.nicklashansen.com/rlpuppeteer/), [Code](https://github.com/nicklashansen/puppeteer))
+- Body Transformer: Leveraging Robot Embodiment for Policy Learning, by Carmelo Sferrazza et al. ([Paper](https://arxiv.org/abs/2408.06316), [Website](https://sferrazza.cc/bot_site/), [Code](https://github.com/carlosferrazza/BodyTransformer))
+
 ## Citation
 If you reference or use MoCapAct in your research, please cite:
 
