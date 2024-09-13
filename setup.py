@@ -9,7 +9,6 @@ setup(
     license='MIT',
     packages=find_packages(),
     install_requires=[
-        'azure.storage.blob==12.9.0',
         'cloudpickle>=2.1.0',
         'dm_control>=1.0.7',
         'gym==0.21',
