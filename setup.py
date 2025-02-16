@@ -18,6 +18,7 @@ setup(
         'ml_collections',
         'mujoco',
         'pytorch-lightning<1.7',
+        'shimmy>=2.0',
         'stable-baselines3'
     ]
 )
