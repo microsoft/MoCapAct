@@ -43,7 +43,7 @@ pip install -e .
 ## Dataset
 The MoCapAct dataset consists of clip experts trained on the MoCap snippets and the rollouts from those experts.
 
-We provide the dataset and models on the [MoCapAct collection on Hugging Face](https://huggingface.co/collections/microsoft/mocapact-66c030d8579a37e69ae3cb26). This collection consists of two pages:
+We provide the dataset and models via the [MoCapAct collection on Hugging Face](https://huggingface.co/collections/microsoft/mocapact-66c030d8579a37e69ae3cb26). This collection consists of two pages:
 - A [model zoo](https://huggingface.co/microsoft/mocapact-models) which contains the clip snippet experts, multiclip policies, RL-trained policies for the transfer tasks, and the GPT policy.
 - A [dataset page](https://huggingface.co/datasets/microsoft/mocapact-data) which contains the small rollout dataset and large rollout dataset.
 
